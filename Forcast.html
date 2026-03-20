@@ -3,46 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MFG Line Balance Forecaster</title>
+    <title>MFG Line Balance Forecaster - Advanced</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #3b82f6; --danger: #ef4444; --success: #22c55e; --text: #334155; --border: #e2e8f0; }
+        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #3b82f6; --danger: #ef4444; --success: #22c55e; --text: #334155; --border: #e2e8f0; --warning: #f59e0b; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1400px; margin: 0 auto; }
         
-        /* Header */
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--border); }
         h1 { margin: 0; color: var(--primary); font-size: 1.8rem; }
-        .btn { background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; }
+        h2 { color: var(--primary); font-size: 1.3rem; margin-top: 0; }
+        
+        .btn { background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; margin-right: 10px; }
         .btn:hover { opacity: 0.9; }
-
-        /* Grid Layouts */
+        .btn-secondary { background: var(--accent); }
+        
         .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 24px; }
         .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
         
-        /* Cards */
         .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid var(--border); }
         .card h3 { margin-top: 0; font-size: 1rem; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 10px; }
         
-        /* Inputs */
         .input-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: var(--primary); }
         input, select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
         
-        /* Stat Widgets */
-        .stat-box { background: var(--primary); color: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .stat-box { background: var(--primary); color: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); cursor: pointer; transition: transform 0.2s; }
+        .stat-box:hover { transform: translateY(-2px); }
         .stat-box span { display: block; font-size: 2rem; font-weight: 800; color: var(--accent); margin-top: 5px; }
+        .stat-label { font-size: 0.9rem; margin-bottom: 5px; }
         
-        /* Chart Container */
         .chart-container { position: relative; height: 300px; width: 100%; margin-top: 10px; }
-
-        /* Table */
+        
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background-color: #f1f5f9; font-weight: 600; color: var(--primary); }
+        
+        .editable-cell { background-color: #fffbeb; cursor: pointer; }
+        .editable-cell:hover { background-color: #fef3c7; }
+        .editable-cell input { width: 100%; border: 2px solid var(--accent); padding: 4px; }
+        
         .status-ok { color: var(--success); font-weight: bold; }
         .status-over { color: var(--danger); font-weight: bold; }
+        .status-warning { color: var(--warning); font-weight: bold; }
         .hidden-column { display: none; }
+        
+        .ai-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-top: 20px; }
+        .ai-box h3 { color: white; margin-top: 0; }
+        .ai-suggestion { background: rgba(255,255,255,0.1); padding: 12px; border-left: 4px solid #fff; margin: 10px 0; border-radius: 4px; }
+        .ai-suggestion strong { color: #fff; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; }
+        .modal-content input { margin-bottom: 15px; }
+        .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; }
     </style>
 </head>
 <body>
@@ -50,12 +67,16 @@
 <div class="container">
     <header>
         <div>
-            <h1>⚙️ MFG Capacity & Balance Forecaster</h1>
-            <small>Live Industrial Engineering Dashboard</small>
+            <h1>⚙️ MFG Capacity & Balance Forecaster - Advanced</h1>
+            <small>Interactive Industrial Engineering Dashboard with AI Insights</small>
         </div>
-        <button class="btn" onclick="exportCSV()">💾 Export to Excel</button>
+        <div>
+            <button class="btn btn-secondary" onclick="resetData()">🔄 Reset</button>
+            <button class="btn" onclick="exportCSV()">💾 Export</button>
+        </div>
     </header>
 
+    <!-- Production Demand & Configuration -->
     <div class="grid-2">
         <div class="card">
             <h3>📅 Production Demand</h3>
@@ -84,8 +105,8 @@
                 </select>
             </div>
             <div class="input-group">
-                <label>Number of Seats/Stations</label>
-                <input type="number" id="seats" value="10" max="50" oninput="calculate()">
+                <label>Number of Stations</label>
+                <input type="number" id="seats" value="10" min="1" max="50" oninput="calculate()">
             </div>
             <div class="input-group">
                 <label>Longest Process Time (LPT in sec)</label>
@@ -94,13 +115,77 @@
         </div>
     </div>
 
+    <!-- Calculated Metrics (Interactive) -->
     <div class="grid-4">
-        <div class="stat-box">Daily Target <span id="val-daily">0</span></div>
-        <div class="stat-box">Req. UPH <span id="val-uph">0</span></div>
-        <div class="stat-box">Takt Time <span id="val-takt">0s</span></div>
-        <div class="stat-box">Req. Operators <span id="val-ops">0</span></div>
+        <div class="stat-box" onclick="editMetric('daily')">
+            <span class="stat-label">Daily Target</span>
+            <span id="val-daily">0</span>
+        </div>
+        <div class="stat-box" onclick="editMetric('uph')">
+            <span class="stat-label">Req. UPH</span>
+            <span id="val-uph">0</span>
+        </div>
+        <div class="stat-box" onclick="editMetric('takt')">
+            <span class="stat-label">Takt Time</span>
+            <span id="val-takt">0s</span>
+        </div>
+        <div class="stat-box" onclick="editMetric('ops')">
+            <span class="stat-label">Req. Operators</span>
+            <span id="val-ops">0</span>
+        </div>
     </div>
 
+    <!-- Advanced Metrics -->
+    <div class="grid-3">
+        <div class="card">
+            <h3>📊 Operational Metrics</h3>
+            <div style="margin-bottom: 10px;">
+                <label>Current Operators (Editable)</label>
+                <input type="number" id="current-ops" value="8" oninput="calculateEfficiency()">
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label>Target UPH (Editable)</label>
+                <input type="number" id="target-uph" value="0" oninput="calculateEfficiency()">
+            </div>
+            <div>
+                <label>Line Efficiency</label>
+                <input type="text" id="efficiency" readonly style="background: #f3f4f6; cursor: not-allowed;">
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📈 Balance Indicators</h3>
+            <div style="margin-bottom: 10px;">
+                <label>Average Cycle Time (s)</label>
+                <input type="text" id="avg-cycle" readonly style="background: #f3f4f6; cursor: not-allowed;">
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label>Variance (Std Dev)</label>
+                <input type="text" id="variance" readonly style="background: #f3f4f6; cursor: not-allowed;">
+            </div>
+            <div>
+                <label>Bottleneck Station</label>
+                <input type="text" id="bottleneck" readonly style="background: #f3f4f6; cursor: not-allowed;">
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>⚡ Performance</h3>
+            <div style="margin-bottom: 10px;">
+                <label>Stations Over Takt</label>
+                <input type="text" id="over-takt" readonly style="background: #f3f4f6; cursor: not-allowed;">
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label>Line Balance Rate</label>
+                <input type="text" id="balance-rate" readonly style="background: #f3f4f6; cursor: not-allowed;">
+            </div>
+            <div>
+                <button class="btn btn-secondary" onclick="optimizeLine()" style="width: 100%; margin-top: 10px;">🚀 Optimize</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Line Balance Chart -->
     <div class="card">
         <h3>📊 Line Balance Visualization (Cycle Time vs Takt)</h3>
         <div class="chart-container">
@@ -108,64 +193,115 @@
         </div>
     </div>
 
+    <!-- Pareto Analysis -->
+    <div class="card">
+        <h3>📉 Pareto Analysis - Bottleneck Identification</h3>
+        <div class="chart-container">
+            <canvas id="paretoChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Station Slot Analysis (Editable) -->
     <div class="card" style="margin-top: 24px; overflow-x: auto;">
-        <h3>📋 Station Slot Analysis</h3>
+        <h3>📋 Station Slot Analysis - Click to Edit Cycle Times</h3>
         <table>
             <thead id="tableHeader">
                 <tr>
                     <th>Station</th>
                     <th>Type</th>
-                    <th id="timeHeader1">LH Time (s)</th>
+                    <th id="timeHeader1">Cycle Time (s)</th>
                     <th id="timeHeader2">RH Time (s)</th>
                     <th>Total (s)</th>
+                    <th>Load %</th>
                     <th>Status</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
+
+    <!-- AI Insights Section -->
+    <div class="ai-box">
+        <h3>🤖 AI Insights & Recommendations</h3>
+        <div id="aiInsights">
+            <p style="text-align: center; opacity: 0.8;">Run calculations to see AI recommendations...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Editing Metrics -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <h2>Edit Metric</h2>
+        <div class="input-group">
+            <label id="modalLabel">Value</label>
+            <input type="number" id="modalInput" style="margin-bottom: 20px;">
+        </div>
+        <div class="modal-buttons">
+            <button class="btn" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-secondary" onclick="saveMetricEdit()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Editing Station Cycle Time -->
+<div id="stationModal" class="modal">
+    <div class="modal-content">
+        <h2>Edit Station Cycle Time</h2>
+        <div class="input-group">
+            <label id="stationLabel">Cycle Time (seconds)</label>
+            <input type="number" id="stationInput" style="margin-bottom: 20px;" step="0.1">
+        </div>
+        <div class="modal-buttons">
+            <button class="btn" onclick="closeStationModal()">Cancel</button>
+            <button class="btn btn-secondary" onclick="saveStationEdit()">Save</button>
+        </div>
+    </div>
 </div>
 
 <script>
-    let myChart = null; // Global variable to hold the chart instance
+    let state = {
+        target: 4000,
+        days: 5,
+        hours: 8,
+        seats: 10,
+        lpt: 40,
+        lineType: 'R1s',
+        stationCycleTimes: [],
+        currentOps: 8,
+        targetUPH: 0
+    };
 
-    // Debug function
-    function debug(message) {
-        console.log('[DEBUG]', message);
-    }
+    let myChart = null;
+    let paretoChart = null;
+    let editingMetric = '';
+    let editingStationIndex = -1;
 
     function calculate() {
-        debug('Calculate function called');
-        
-        // 1. Get Inputs
-        const target = parseFloat(document.getElementById('target').value) || 0;
-        const days = parseFloat(document.getElementById('days').value) || 1;
-        const hours = parseFloat(document.getElementById('hours').value) || 1;
-        const seats = parseInt(document.getElementById('seats').value) || 1;
-        const lpt = parseFloat(document.getElementById('lpt').value) || 0;
-        const lineType = document.getElementById('lineType').value;
+        state.target = parseFloat(document.getElementById('target').value) || 0;
+        state.days = parseFloat(document.getElementById('days').value) || 1;
+        state.hours = parseFloat(document.getElementById('hours').value) || 1;
+        state.seats = parseInt(document.getElementById('seats').value) || 1;
+        state.lpt = parseFloat(document.getElementById('lpt').value) || 0;
+        state.lineType = document.getElementById('lineType').value;
 
-        debug(`Inputs: target=${target}, days=${days}, hours=${hours}, seats=${seats}, lpt=${lpt}, lineType=${lineType}`);
-
-        // 2. Math Calculations
-        const dailyTarget = Math.ceil(target / days);
-        const uph = dailyTarget / hours;
+        const dailyTarget = Math.ceil(state.target / state.days);
+        const uph = dailyTarget / state.hours;
         const takt = 3600 / uph;
-        const requiredOps = Math.ceil((lpt / takt) * seats);
+        const requiredOps = Math.ceil((state.lpt / takt) * state.seats);
 
-        debug(`Calculations: dailyTarget=${dailyTarget}, uph=${uph}, takt=${takt}, requiredOps=${requiredOps}`);
-
-        // 3. Update DOM Metrics
         document.getElementById('val-daily').innerText = dailyTarget;
         document.getElementById('val-uph').innerText = uph.toFixed(1);
         document.getElementById('val-takt').innerText = takt.toFixed(1) + 's';
         document.getElementById('val-ops').innerText = requiredOps;
 
-        // 4. Update Table Header based on Line Type
+        if (!document.getElementById('target-uph').value) {
+            document.getElementById('target-uph').value = uph.toFixed(1);
+        }
+
         const header1 = document.getElementById('timeHeader1');
         const header2 = document.getElementById('timeHeader2');
-        
-        if (lineType === 'EDV') {
+        if (state.lineType === 'EDV') {
             header1.innerText = 'Cycle Time (s)';
             header2.style.display = 'none';
         } else {
@@ -173,155 +309,319 @@
             header2.style.display = '';
         }
 
-        // 5. Generate Station Data & Update Table
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-        
-        let labels = [];
-        let totalTimes = [];
-        let barColors = [];
-        let taktLineData = [];
-
-        for(let i = 1; i <= seats; i++) {
-            // Generate realistic mock data based on LPT input
-            let variance = 0.85 + (Math.random() * 0.20); // 85% to 105% of LPT
-            let totalTime = lpt * variance;
-            let lhTime = totalTime * 0.45;
-            let rhTime = totalTime * 0.55;
-            
-            let isOver = totalTime > takt;
-            let statusText = isOver ? '⚠️ OVER TAKT' : '✅ OK';
-            let statusClass = isOver ? 'status-over' : 'status-ok';
-
-            labels.push(`Seat ${i}`);
-            totalTimes.push(totalTime.toFixed(1));
-            barColors.push(isOver ? '#ef4444' : '#3b82f6'); // Red if over, Blue if OK
-            taktLineData.push(takt.toFixed(1));
-
-            if (lineType === 'EDV') {
-                // For EDV, show only one time column
-                tbody.innerHTML += `
-                    <tr>
-                        <td><strong>Seat ${i}</strong></td>
-                        <td>${lineType}</td>
-                        <td>${totalTime.toFixed(1)}</td>
-                        <td class="hidden-column"></td>
-                        <td class="${statusClass}">${totalTime.toFixed(1)}</td>
-                        <td class="${statusClass}">${statusText}</td>
-                    </tr>
-                `;
-            } else {
-                // For other line types, show LH and RH
-                tbody.innerHTML += `
-                    <tr>
-                        <td><strong>Seat ${i}</strong></td>
-                        <td>${lineType}</td>
-                        <td>${lhTime.toFixed(1)}</td>
-                        <td>${rhTime.toFixed(1)}</td>
-                        <td class="${statusClass}">${totalTime.toFixed(1)}</td>
-                        <td class="${statusClass}">${statusText}</td>
-                    </tr>
-                `;
+        if (state.stationCycleTimes.length === 0) {
+            for (let i = 0; i < state.seats; i++) {
+                let variance = 0.85 + (Math.random() * 0.20);
+                state.stationCycleTimes[i] = (state.lpt * variance).toFixed(1);
             }
         }
 
-        // 5. Update Chart.js
-        updateChart(labels, totalTimes, barColors, taktLineData, takt);
+        updateTableAndCharts(takt);
+        calculateEfficiency();
+        generateAIInsights(takt, uph, requiredOps, dailyTarget);
     }
 
-    function updateChart(labels, dataArr, colors, taktData, taktValue) {
-        debug('Updating chart with data:', { labels, dataArr, colors, taktData, taktValue });
-        
-        const ctx = document.getElementById('balanceChart');
-        if (!ctx) {
-            debug('ERROR: Canvas element not found!');
-            return;
-        }
-        
-        if (typeof Chart === 'undefined') {
-            debug('ERROR: Chart.js not loaded!');
-            return;
-        }
-        
-        if(myChart) { 
-            debug('Destroying old chart');
-            myChart.destroy(); 
-        } // Destroy old chart before re-drawing
+    function updateTableAndCharts(takt) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
 
-        try {
-            myChart = new Chart(ctx.getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            type: 'line',
-                            label: `Takt Time (${taktValue.toFixed(1)}s)`,
-                            data: taktData,
-                            borderColor: '#ef4444',
-                            borderWidth: 2,
-                            borderDash: [5, 5],
-                            fill: false,
-                            pointRadius: 0
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Total Cycle Time (s)',
-                            data: dataArr,
-                            backgroundColor: colors,
-                            borderRadius: 4
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Seconds' } }
-                    },
-                    animation: { duration: 400 }
-                }
-            });
-            debug('Chart created successfully');
-        } catch (error) {
-            debug('ERROR creating chart:', error);
+        let labels = [];
+        let totalTimes = [];
+        let barColors = [];
+        let loads = [];
+        let overTaktCount = 0;
+
+        for (let i = 0; i < state.seats; i++) {
+            const cycleTime = parseFloat(state.stationCycleTimes[i]) || 0;
+            const isOver = cycleTime > takt;
+            const statusText = isOver ? '⚠️ OVER TAKT' : '✅ OK';
+            const statusClass = isOver ? 'status-over' : 'status-ok';
+            const loadPercent = ((cycleTime / takt) * 100).toFixed(1);
+            const loadClass = loadPercent > 100 ? 'status-over' : (loadPercent > 85 ? 'status-warning' : 'status-ok');
+
+            if (isOver) overTaktCount++;
+
+            labels.push(`S${i + 1}`);
+            totalTimes.push(cycleTime);
+            loads.push(loadPercent);
+            barColors.push(isOver ? '#ef4444' : '#3b82f6');
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>Station ${i + 1}</strong></td>
+                    <td>${state.lineType}</td>
+                    <td class="editable-cell" onclick="editStationCycleTime(${i}, ${cycleTime})">${cycleTime}</td>
+                    <td class="hidden-column"></td>
+                    <td>${cycleTime}</td>
+                    <td class="${loadClass}">${loadPercent}%</td>
+                    <td class="${statusClass}">${statusText}</td>
+                </tr>
+            `;
         }
+
+        const avgCycle = (totalTimes.reduce((a, b) => a + parseFloat(b), 0) / state.seats).toFixed(1);
+        const variance = calculateVariance(totalTimes);
+        const maxCycle = Math.max(...totalTimes.map(t => parseFloat(t)));
+        const bottleneck = labels[totalTimes.map(t => parseFloat(t)).indexOf(maxCycle)];
+
+        document.getElementById('avg-cycle').value = avgCycle + ' s';
+        document.getElementById('variance').value = variance.toFixed(2);
+        document.getElementById('bottleneck').value = bottleneck;
+        document.getElementById('over-takt').value = overTaktCount + ' / ' + state.seats;
+
+        const balanceRate = (((state.seats * takt) / (state.seats * maxCycle)) * 100).toFixed(1);
+        document.getElementById('balance-rate').value = balanceRate + '%';
+
+        updateLineBalanceChart(labels, totalTimes, barColors, takt);
+        updateParetoChart(labels, totalTimes, takt);
+    }
+
+    function calculateVariance(values) {
+        const avg = values.reduce((a, b) => a + parseFloat(b), 0) / values.length;
+        const squareDiffs = values.map(v => Math.pow(parseFloat(v) - avg, 2));
+        return Math.sqrt(squareDiffs.reduce((a, b) => a + b) / values.length);
+    }
+
+    function updateLineBalanceChart(labels, times, colors, takt) {
+        const ctx = document.getElementById('balanceChart');
+        if (!ctx) return;
+
+        if (myChart) myChart.destroy();
+
+        const taktLine = Array(labels.length).fill(takt.toFixed(1));
+
+        myChart = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        type: 'line',
+                        label: `Takt Time (${takt.toFixed(1)}s)`,
+                        data: taktLine,
+                        borderColor: '#ef4444',
+                        borderWidth: 3,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Cycle Time (s)',
+                        data: times,
+                        backgroundColor: colors,
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Seconds' } }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top' }
+                }
+            }
+        });
+    }
+
+    function updateParetoChart(labels, times, takt) {
+        const ctx = document.getElementById('paretoChart');
+        if (!ctx) return;
+
+        if (paretoChart) paretoChart.destroy();
+
+        const deviations = times.map(t => Math.max(0, parseFloat(t) - takt));
+        const sorted = deviations.map((val, idx) => ({ val, label: labels[idx] }))
+                                  .sort((a, b) => b.val - a.val);
+
+        const sortedLabels = sorted.map(s => s.label);
+        const sortedValues = sorted.map(s => s.val);
+        const cumulativePercent = [];
+        let cumsum = 0;
+        const total = sortedValues.reduce((a, b) => a + b, 0) || 1;
+
+        sortedValues.forEach(val => {
+            cumsum += val;
+            cumulativePercent.push((cumsum / total * 100).toFixed(1));
+        });
+
+        paretoChart = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: sortedLabels,
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Over-Takt Deviation (s)',
+                        data: sortedValues,
+                        backgroundColor: '#ef4444',
+                        yAxisID: 'y',
+                        borderRadius: 4
+                    },
+                    {
+                        type: 'line',
+                        label: 'Cumulative %',
+                        data: cumulativePercent,
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        yAxisID: 'y1',
+                        fill: false,
+                        pointRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Deviation (s)' } },
+                    y1: { type: 'linear', position: 'right', min: 0, max: 100, title: { display: true, text: 'Cumulative %' }, grid: { drawOnChartArea: false } }
+                },
+                plugins: { legend: { display: true, position: 'top' } }
+            }
+        });
+    }
+
+    function calculateEfficiency() {
+        const currentOps = parseFloat(document.getElementById('current-ops').value) || 1;
+        const targetUPH = parseFloat(document.getElementById('target-uph').value) || parseFloat(document.getElementById('val-uph').innerText) || 1;
+        const requiredOps = parseFloat(document.getElementById('val-ops').innerText) || 1;
+        
+        const efficiency = ((requiredOps / currentOps) * 100).toFixed(1);
+        document.getElementById('efficiency').value = efficiency + '%';
+    }
+
+    function generateAIInsights(takt, uph, requiredOps, dailyTarget) {
+        const overTaktCount = state.stationCycleTimes.filter(t => parseFloat(t) > takt).length;
+        const currentOps = parseFloat(document.getElementById('current-ops').value) || 1;
+        const efficiency = (requiredOps / currentOps) * 100;
+
+        let insights = [];
+
+        if (overTaktCount > 0) {
+            insights.push(`<strong>🚨 Critical Issue:</strong> ${overTaktCount} station(s) exceed takt time. This will cause line starvation and reduce throughput.`);
+            insights.push(`<strong>💡 Action:</strong> Consider process improvements or rebalancing work elements to stations with excess capacity.`);
+        }
+
+        if (efficiency > 100) {
+            insights.push(`<strong>⚠️ Understaffed:</strong> Currently have ${Math.round(currentOps)} operators, but need ${Math.round(requiredOps)} for target throughput.`);
+            insights.push(`<strong>💡 Recommendation:</strong> Add ${Math.round(requiredOps - currentOps)} more operators to meet the ${dailyTarget} unit/day target.`);
+        } else if (efficiency < 70) {
+            insights.push(`<strong>✅ Well Staffed:</strong> You have adequate operators (${Math.round(efficiency)}% utilization).`);
+            insights.push(`<strong>💡 Opportunity:</strong> Consider reducing staff or increasing target to improve labor utilization.`);
+        } else {
+            insights.push(`<strong>📊 Balanced Staffing:</strong> Current staffing level is well-aligned (${Math.round(efficiency)}% utilization).`);
+        }
+
+        const avgCycle = parseFloat(document.getElementById('avg-cycle').value) || takt;
+        if (avgCycle < takt * 0.7) {
+            insights.push(`<strong>💪 High Capacity:</strong> Average cycle time is significantly below takt. Consider increasing production targets.`);
+        }
+
+        const balanceRate = parseFloat(document.getElementById('balance-rate').value) || 80;
+        if (balanceRate < 75) {
+            insights.push(`<strong>📉 Poor Balance:</strong> Line balance rate is ${balanceRate.toFixed(1)}%. Work rebalancing could improve efficiency by ${(100 - balanceRate).toFixed(1)}%.`);
+        }
+
+        document.getElementById('aiInsights').innerHTML = insights
+            .map(insight => `<div class="ai-suggestion">${insight}</div>`)
+            .join('');
+    }
+
+    function editStationCycleTime(index, currentValue) {
+        editingStationIndex = index;
+        document.getElementById('stationLabel').innerText = `Station ${index + 1} Cycle Time (seconds)`;
+        document.getElementById('stationInput').value = currentValue;
+        document.getElementById('stationModal').classList.add('active');
+        document.getElementById('stationInput').focus();
+    }
+
+    function saveStationEdit() {
+        const newValue = parseFloat(document.getElementById('stationInput').value);
+        if (editingStationIndex >= 0 && !isNaN(newValue)) {
+            state.stationCycleTimes[editingStationIndex] = newValue.toFixed(1);
+            const takt = 3600 / (parseFloat(document.getElementById('val-uph').innerText) || 1);
+            updateTableAndCharts(takt);
+            generateAIInsights(takt, parseFloat(document.getElementById('val-uph').innerText), parseFloat(document.getElementById('val-ops').innerText), parseFloat(document.getElementById('val-daily').innerText));
+        }
+        closeStationModal();
+    }
+
+    function closeStationModal() {
+        document.getElementById('stationModal').classList.remove('active');
+        editingStationIndex = -1;
+    }
+
+    function editMetric(metric) {
+        editingMetric = metric;
+        let labels = { daily: 'Daily Target', uph: 'Required UPH', takt: 'Takt Time', ops: 'Required Operators' };
+        let values = { daily: document.getElementById('val-daily').innerText, uph: document.getElementById('val-uph').innerText, takt: document.getElementById('val-takt').innerText.replace('s', ''), ops: document.getElementById('val-ops').innerText };
+        
+        document.getElementById('modalLabel').innerText = labels[metric];
+        document.getElementById('modalInput').value = values[metric];
+        document.getElementById('editModal').classList.add('active');
+        document.getElementById('modalInput').focus();
+    }
+
+    function closeModal() {
+        document.getElementById('editModal').classList.remove('active');
+        editingMetric = '';
+    }
+
+    function saveMetricEdit() {
+        const newValue = parseFloat(document.getElementById('modalInput').value);
+        if (!isNaN(newValue)) {
+            const uph = parseFloat(document.getElementById('val-uph').innerText);
+            const takt = 3600 / uph;
+            
+            if (editingMetric === 'ops') {
+                document.getElementById('current-ops').value = newValue;
+                calculateEfficiency();
+            }
+        }
+        closeModal();
+    }
+
+    function optimizeLine() {
+        alert('Optimization feature: The system recommends rebalancing work elements starting from Station ' + document.getElementById('bottleneck').value + ' to reduce cycle time variance.');
+    }
+
+    function resetData() {
+        state.stationCycleTimes = [];
+        document.getElementById('target').value = 4000;
+        document.getElementById('days').value = 5;
+        document.getElementById('hours').value = 8;
+        document.getElementById('seats').value = 10;
+        document.getElementById('lpt').value = 40;
+        document.getElementById('current-ops').value = 8;
+        calculate();
     }
 
     function exportCSV() {
-        let csv = "Station,Type,LH_Time_sec,RH_Time_sec,Total_Time_sec,Status\n";
+        let csv = "Station,LineType,CycleTime,Load%,Status\n";
         const rows = document.querySelectorAll("#tableBody tr");
         rows.forEach(row => {
-            const cols = Array.from(row.querySelectorAll("td")).map(td => td.innerText.replace('⚠️ ', '').replace('✅ ', ''));
+            const cols = Array.from(row.querySelectorAll("td")).slice(0, 6).map(td => td.innerText.replace(/[⚠️✅]/g, '').trim());
             csv += cols.join(",") + "\n";
         });
         
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'Line_Balance_Forecast.csv';
-        a.click();
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'Line_Balance_Forecast.csv';
+        link.click();
     }
 
-    // Run on load
-    window.onload = function() {
-        debug('Page loaded, initializing...');
-        calculate();
-        debug('Initialization complete');
-    };
-    
-    // Check if Chart.js loads
-    window.addEventListener('load', function() {
-        setTimeout(function() {
-            if (typeof Chart === 'undefined') {
-                debug('Chart.js failed to load after 2 seconds');
-                alert('Chart.js library failed to load. Please check your internet connection.');
-            } else {
-                debug('Chart.js loaded successfully');
-            }
-        }, 2000);
-    });
+    document.getElementById('current-ops').addEventListener('keypress', (e) => { if (e.key === 'Enter') calculateEfficiency(); });
+    document.getElementById('modalInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveMetricEdit(); });
+    document.getElementById('stationInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveStationEdit(); });
+
+    window.onload = calculate;
 </script>
 
 </body>
