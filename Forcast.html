@@ -63,6 +63,11 @@
     </style>
 </head>
 <body>
+<script>
+if (!window.location.search.includes('token=securelink123')) {
+    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h1>🔒 Access Denied</h1><p>This is a private link. Please contact the owner for access.</p></div>';
+}
+</script>
 
 <div class="container">
     <header>
