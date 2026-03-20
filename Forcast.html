@@ -244,6 +244,21 @@
     </div>
 </div>
 
+<!-- Modal for Editing Station Name -->
+<div id="stationNameModal" class="modal">
+    <div class="modal-content">
+        <h2>Edit Station Name</h2>
+        <div class="input-group">
+            <label id="stationNameLabel">Station Name</label>
+            <input type="text" id="stationNameInput" style="margin-bottom: 20px;" placeholder="e.g., Assembly, Welding, Inspection">
+        </div>
+        <div class="modal-buttons">
+            <button class="btn" onclick="closeStationNameModal()">Cancel</button>
+            <button class="btn btn-secondary" onclick="saveStationNameEdit()">Save</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal for Editing Station Cycle Time -->
 <div id="stationModal" class="modal">
     <div class="modal-content">
@@ -268,6 +283,7 @@
         lpt: 40,
         lineType: 'R1s',
         stationCycleTimes: [],
+        stationNames: [],
         currentOps: 8,
         targetUPH: 0
     };
@@ -276,6 +292,7 @@
     let paretoChart = null;
     let editingMetric = '';
     let editingStationIndex = -1;
+    let editingNameIndex = -1;
 
     function calculate() {
         state.target = parseFloat(document.getElementById('target').value) || 0;
@@ -313,6 +330,14 @@
             for (let i = 0; i < state.seats; i++) {
                 let variance = 0.85 + (Math.random() * 0.20);
                 state.stationCycleTimes[i] = (state.lpt * variance).toFixed(1);
+                state.stationNames[i] = `Station ${i + 1}`;
+            }
+        } else if (state.stationNames.length < state.seats) {
+            // Add names for new stations if count increased
+            for (let i = state.stationNames.length; i < state.seats; i++) {
+                let variance = 0.85 + (Math.random() * 0.20);
+                state.stationCycleTimes[i] = (state.lpt * variance).toFixed(1);
+                state.stationNames[i] = `Station ${i + 1}`;
             }
         }
 
@@ -346,9 +371,11 @@
             loads.push(loadPercent);
             barColors.push(isOver ? '#ef4444' : '#3b82f6');
 
+            const stationName = state.stationNames[i] || `Station ${i + 1}`;
+
             tbody.innerHTML += `
                 <tr>
-                    <td><strong>Station ${i + 1}</strong></td>
+                    <td class="editable-cell" onclick="editStationName(${i}, '${stationName}')"><strong>${stationName}</strong></td>
                     <td>${state.lineType}</td>
                     <td class="editable-cell" onclick="editStationCycleTime(${i}, ${cycleTime})">${cycleTime}</td>
                     <td class="hidden-column"></td>
@@ -534,7 +561,8 @@
 
     function editStationCycleTime(index, currentValue) {
         editingStationIndex = index;
-        document.getElementById('stationLabel').innerText = `Station ${index + 1} Cycle Time (seconds)`;
+        const stationName = state.stationNames[index] || `Station ${index + 1}`;
+        document.getElementById('stationLabel').innerText = `${stationName} - Cycle Time (seconds)`;
         document.getElementById('stationInput').value = currentValue;
         document.getElementById('stationModal').classList.add('active');
         document.getElementById('stationInput').focus();
@@ -554,6 +582,30 @@
     function closeStationModal() {
         document.getElementById('stationModal').classList.remove('active');
         editingStationIndex = -1;
+    }
+
+    function editStationName(index, currentName) {
+        editingNameIndex = index;
+        document.getElementById('stationNameLabel').innerText = `Rename Station ${index + 1}`;
+        document.getElementById('stationNameInput').value = currentName;
+        document.getElementById('stationNameModal').classList.add('active');
+        document.getElementById('stationNameInput').focus();
+        document.getElementById('stationNameInput').select();
+    }
+
+    function saveStationNameEdit() {
+        const newName = document.getElementById('stationNameInput').value.trim();
+        if (editingNameIndex >= 0 && newName) {
+            state.stationNames[editingNameIndex] = newName;
+            const takt = 3600 / (parseFloat(document.getElementById('val-uph').innerText) || 1);
+            updateTableAndCharts(takt);
+        }
+        closeStationNameModal();
+    }
+
+    function closeStationNameModal() {
+        document.getElementById('stationNameModal').classList.remove('active');
+        editingNameIndex = -1;
     }
 
     function editMetric(metric) {
@@ -592,6 +644,7 @@
 
     function resetData() {
         state.stationCycleTimes = [];
+        state.stationNames = [];
         document.getElementById('target').value = 4000;
         document.getElementById('days').value = 5;
         document.getElementById('hours').value = 8;
@@ -620,6 +673,7 @@
     document.getElementById('current-ops').addEventListener('keypress', (e) => { if (e.key === 'Enter') calculateEfficiency(); });
     document.getElementById('modalInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveMetricEdit(); });
     document.getElementById('stationInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveStationEdit(); });
+    document.getElementById('stationNameInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveStationNameEdit(); });
 
     window.onload = calculate;
 </script>
