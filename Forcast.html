@@ -42,6 +42,7 @@
         th { background-color: #f1f5f9; font-weight: 600; color: var(--primary); }
         .status-ok { color: var(--success); font-weight: bold; }
         .status-over { color: var(--danger); font-weight: bold; }
+        .hidden-column { display: none; }
     </style>
 </head>
 <body>
@@ -110,12 +111,12 @@
     <div class="card" style="margin-top: 24px; overflow-x: auto;">
         <h3>📋 Station Slot Analysis</h3>
         <table>
-            <thead>
+            <thead id="tableHeader">
                 <tr>
                     <th>Station</th>
                     <th>Type</th>
-                    <th>LH Time (s)</th>
-                    <th>RH Time (s)</th>
+                    <th id="timeHeader1">LH Time (s)</th>
+                    <th id="timeHeader2">RH Time (s)</th>
                     <th>Total (s)</th>
                     <th>Status</th>
                 </tr>
@@ -160,7 +161,19 @@
         document.getElementById('val-takt').innerText = takt.toFixed(1) + 's';
         document.getElementById('val-ops').innerText = requiredOps;
 
-        // 4. Generate Station Data & Update Table
+        // 4. Update Table Header based on Line Type
+        const header1 = document.getElementById('timeHeader1');
+        const header2 = document.getElementById('timeHeader2');
+        
+        if (lineType === 'EDV') {
+            header1.innerText = 'Cycle Time (s)';
+            header2.style.display = 'none';
+        } else {
+            header1.innerText = 'LH Time (s)';
+            header2.style.display = '';
+        }
+
+        // 5. Generate Station Data & Update Table
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         
@@ -185,16 +198,31 @@
             barColors.push(isOver ? '#ef4444' : '#3b82f6'); // Red if over, Blue if OK
             taktLineData.push(takt.toFixed(1));
 
-            tbody.innerHTML += `
-                <tr>
-                    <td><strong>Seat ${i}</strong></td>
-                    <td>${lineType}</td>
-                    <td>${lhTime.toFixed(1)}</td>
-                    <td>${rhTime.toFixed(1)}</td>
-                    <td class="${statusClass}">${totalTime.toFixed(1)}</td>
-                    <td class="${statusClass}">${statusText}</td>
-                </tr>
-            `;
+            if (lineType === 'EDV') {
+                // For EDV, show only one time column
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>Seat ${i}</strong></td>
+                        <td>${lineType}</td>
+                        <td>${totalTime.toFixed(1)}</td>
+                        <td class="hidden-column"></td>
+                        <td class="${statusClass}">${totalTime.toFixed(1)}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                    </tr>
+                `;
+            } else {
+                // For other line types, show LH and RH
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>Seat ${i}</strong></td>
+                        <td>${lineType}</td>
+                        <td>${lhTime.toFixed(1)}</td>
+                        <td>${rhTime.toFixed(1)}</td>
+                        <td class="${statusClass}">${totalTime.toFixed(1)}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                    </tr>
+                `;
+            }
         }
 
         // 5. Update Chart.js
