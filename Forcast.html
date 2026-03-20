@@ -128,7 +128,14 @@
 <script>
     let myChart = null; // Global variable to hold the chart instance
 
+    // Debug function
+    function debug(message) {
+        console.log('[DEBUG]', message);
+    }
+
     function calculate() {
+        debug('Calculate function called');
+        
         // 1. Get Inputs
         const target = parseFloat(document.getElementById('target').value) || 0;
         const days = parseFloat(document.getElementById('days').value) || 1;
@@ -137,11 +144,15 @@
         const lpt = parseFloat(document.getElementById('lpt').value) || 0;
         const lineType = document.getElementById('lineType').value;
 
+        debug(`Inputs: target=${target}, days=${days}, hours=${hours}, seats=${seats}, lpt=${lpt}, lineType=${lineType}`);
+
         // 2. Math Calculations
         const dailyTarget = Math.ceil(target / days);
         const uph = dailyTarget / hours;
         const takt = 3600 / uph;
         const requiredOps = Math.ceil((lpt / takt) * seats);
+
+        debug(`Calculations: dailyTarget=${dailyTarget}, uph=${uph}, takt=${takt}, requiredOps=${requiredOps}`);
 
         // 3. Update DOM Metrics
         document.getElementById('val-daily').innerText = dailyTarget;
@@ -191,43 +202,62 @@
     }
 
     function updateChart(labels, dataArr, colors, taktData, taktValue) {
-        const ctx = document.getElementById('balanceChart').getContext('2d');
+        debug('Updating chart with data:', { labels, dataArr, colors, taktData, taktValue });
         
-        if(myChart) { myChart.destroy(); } // Destroy old chart before re-drawing
+        const ctx = document.getElementById('balanceChart');
+        if (!ctx) {
+            debug('ERROR: Canvas element not found!');
+            return;
+        }
+        
+        if (typeof Chart === 'undefined') {
+            debug('ERROR: Chart.js not loaded!');
+            return;
+        }
+        
+        if(myChart) { 
+            debug('Destroying old chart');
+            myChart.destroy(); 
+        } // Destroy old chart before re-drawing
 
-        myChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        type: 'line',
-                        label: `Takt Time (${taktValue.toFixed(1)}s)`,
-                        data: taktData,
-                        borderColor: '#ef4444',
-                        borderWidth: 2,
-                        borderDash: [5, 5],
-                        fill: false,
-                        pointRadius: 0
-                    },
-                    {
-                        type: 'bar',
-                        label: 'Total Cycle Time (s)',
-                        data: dataArr,
-                        backgroundColor: colors,
-                        borderRadius: 4
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, title: { display: true, text: 'Seconds' } }
+        try {
+            myChart = new Chart(ctx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: `Takt Time (${taktValue.toFixed(1)}s)`,
+                            data: taktData,
+                            borderColor: '#ef4444',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Total Cycle Time (s)',
+                            data: dataArr,
+                            backgroundColor: colors,
+                            borderRadius: 4
+                        }
+                    ]
                 },
-                animation: { duration: 400 }
-            }
-        });
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Seconds' } }
+                    },
+                    animation: { duration: 400 }
+                }
+            });
+            debug('Chart created successfully');
+        } catch (error) {
+            debug('ERROR creating chart:', error);
+        }
     }
 
     function exportCSV() {
@@ -247,7 +277,23 @@
     }
 
     // Run on load
-    window.onload = calculate;
+    window.onload = function() {
+        debug('Page loaded, initializing...');
+        calculate();
+        debug('Initialization complete');
+    };
+    
+    // Check if Chart.js loads
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            if (typeof Chart === 'undefined') {
+                debug('Chart.js failed to load after 2 seconds');
+                alert('Chart.js library failed to load. Please check your internet connection.');
+            } else {
+                debug('Chart.js loaded successfully');
+            }
+        }, 2000);
+    });
 </script>
 
 </body>
