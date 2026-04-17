@@ -7,75 +7,71 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #3b82f6; --danger: #ef4444; --success: #22c55e; --text: #334155; --border: #e2e8f0; --warning: #f59e0b; }
+        * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; }
-        
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--border); }
         h1 { margin: 0; color: var(--primary); font-size: 1.8rem; }
         h2 { color: var(--primary); font-size: 1.3rem; margin-top: 0; }
-        
         .btn { background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; margin-right: 10px; }
         .btn:hover { opacity: 0.9; }
         .btn-secondary { background: var(--accent); }
-        
+        .btn-danger { background: var(--danger); }
         .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 24px; }
         .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 24px; }
         .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
-        
-        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid var(--border); }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border); }
         .card h3 { margin-top: 0; font-size: 1rem; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-        
         .input-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: var(--primary); }
         input, select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
-        input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-        
-        .stat-box { background: var(--primary); color: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); cursor: pointer; transition: transform 0.2s; }
-        .stat-box:hover { transform: translateY(-2px); }
+        input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+        .stat-box { background: var(--primary); color: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .stat-box span { display: block; font-size: 2rem; font-weight: 800; color: var(--accent); margin-top: 5px; }
         .stat-label { font-size: 0.9rem; margin-bottom: 5px; }
-        
         .chart-container { position: relative; height: 300px; width: 100%; margin-top: 10px; }
-        
+        .yamazumi-container { position: relative; height: 360px; width: 100%; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background-color: #f1f5f9; font-weight: 600; color: var(--primary); }
-        
-        .editable-cell { background-color: #fffbeb; cursor: pointer; }
-        .editable-cell:hover { background-color: #fef3c7; }
-        .editable-cell input { width: 100%; border: 2px solid var(--accent); padding: 4px; }
-        
+        .editable-cell { cursor: pointer; color: var(--accent); text-decoration: underline dotted; text-underline-offset: 2px; }
+        .editable-cell:hover { opacity: 0.75; }
         .status-ok { color: var(--success); font-weight: bold; }
         .status-over { color: var(--danger); font-weight: bold; }
         .status-warning { color: var(--warning); font-weight: bold; }
-        .hidden-column { display: none; }
-        
         .ai-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-top: 20px; }
         .ai-box h3 { color: white; margin-top: 0; }
         .ai-suggestion { background: rgba(255,255,255,0.1); padding: 12px; border-left: 4px solid #fff; margin: 10px 0; border-radius: 4px; }
-        .ai-suggestion strong { color: #fff; }
-        
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
         .modal.active { display: flex; align-items: center; justify-content: center; }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; }
-        .modal-content input { margin-bottom: 15px; }
-        .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; max-width: 520px; width: 90%; max-height: 85vh; overflow-y: auto; }
+        .modal-content input, .modal-content select { margin-bottom: 10px; }
+        .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+        .we-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .we-row:last-child { border-bottom: none; }
+        .color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; margin: 2px; }
+        .cat-pill { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; cursor: pointer; margin: 3px; border: 2px solid transparent; color: #fff; transition: opacity 0.15s; }
+        .cat-pill.selected { border-color: var(--primary); }
+        .cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .hint-text { font-size: 0.78rem; color: #64748b; margin-top: -8px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 <script>
 if (!window.location.search.includes('token=securelink123')) {
-    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h1>🔒 Access Denied</h1><p>This is a private link. Please contact the owner for access.</p></div>';
+    document.body.innerHTML = '<div style="text-align:center;padding:50px;font-family:Arial,sans-serif"><h1>🔒 Access Denied</h1><p>This is a private link. Please contact the owner for access.</p></div>';
 }
 </script>
 
 <div class="container">
     <header>
         <div>
-            <h1>⚙️ MFG Capacity & Balance Forecaster - Advanced</h1>
-            <small>Interactive Industrial Engineering Dashboard with AI Insights</small>
+            <h1>⚙️ MFG Capacity &amp; Balance Forecaster - Advanced</h1>
+            <small>Interactive Industrial Engineering Dashboard with AI Insights &amp; Yamazumi</small>
         </div>
         <div>
+            <button class="btn btn-secondary" onclick="manageCats()">🏷️ Categories</button>
             <button class="btn btn-secondary" onclick="resetData()">🔄 Reset</button>
             <button class="btn" onclick="exportCSV()">💾 Export</button>
         </div>
@@ -114,27 +110,28 @@ if (!window.location.search.includes('token=securelink123')) {
                 <input type="number" id="seats" value="10" min="1" max="50" oninput="calculate()">
             </div>
             <div class="input-group">
-                <label>Longest Process Time (LPT in sec)</label>
-                <input type="number" id="lpt" value="40" oninput="calculate()">
+                <label>Total Seconds to Build One Unit</label>
+                <input type="number" id="totalBuildTime" value="400" oninput="onBuildTimeInput()">
+                <p class="hint-text">Auto-sums station cycle times — edit to override</p>
             </div>
         </div>
     </div>
 
-    <!-- Calculated Metrics (Interactive) -->
+    <!-- Calculated Metrics -->
     <div class="grid-4">
-        <div class="stat-box" onclick="editMetric('daily')">
+        <div class="stat-box">
             <span class="stat-label">Daily Target</span>
             <span id="val-daily">0</span>
         </div>
-        <div class="stat-box" onclick="editMetric('uph')">
+        <div class="stat-box">
             <span class="stat-label">Req. UPH</span>
             <span id="val-uph">0</span>
         </div>
-        <div class="stat-box" onclick="editMetric('takt')">
+        <div class="stat-box">
             <span class="stat-label">Takt Time</span>
             <span id="val-takt">0s</span>
         </div>
-        <div class="stat-box" onclick="editMetric('ops')">
+        <div class="stat-box">
             <span class="stat-label">Req. Operators</span>
             <span id="val-ops">0</span>
         </div>
@@ -144,49 +141,43 @@ if (!window.location.search.includes('token=securelink123')) {
     <div class="grid-3">
         <div class="card">
             <h3>📊 Operational Metrics</h3>
-            <div style="margin-bottom: 10px;">
+            <div class="input-group">
                 <label>Current Operators (Editable)</label>
                 <input type="number" id="current-ops" value="8" oninput="calculateEfficiency()">
             </div>
-            <div style="margin-bottom: 10px;">
-                <label>Target UPH (Editable)</label>
-                <input type="number" id="target-uph" value="0" oninput="calculateEfficiency()">
-            </div>
-            <div>
+            <div class="input-group">
                 <label>Line Efficiency</label>
-                <input type="text" id="efficiency" readonly style="background: #f3f4f6; cursor: not-allowed;">
+                <input type="text" id="efficiency" readonly style="background:#f3f4f6;cursor:not-allowed">
             </div>
         </div>
 
         <div class="card">
             <h3>📈 Balance Indicators</h3>
-            <div style="margin-bottom: 10px;">
+            <div class="input-group">
                 <label>Average Cycle Time (s)</label>
-                <input type="text" id="avg-cycle" readonly style="background: #f3f4f6; cursor: not-allowed;">
+                <input type="text" id="avg-cycle" readonly style="background:#f3f4f6;cursor:not-allowed">
             </div>
-            <div style="margin-bottom: 10px;">
+            <div class="input-group">
                 <label>Variance (Std Dev)</label>
-                <input type="text" id="variance" readonly style="background: #f3f4f6; cursor: not-allowed;">
+                <input type="text" id="variance" readonly style="background:#f3f4f6;cursor:not-allowed">
             </div>
-            <div>
+            <div class="input-group">
                 <label>Bottleneck Station</label>
-                <input type="text" id="bottleneck" readonly style="background: #f3f4f6; cursor: not-allowed;">
+                <input type="text" id="bottleneck" readonly style="background:#f3f4f6;cursor:not-allowed">
             </div>
         </div>
 
         <div class="card">
             <h3>⚡ Performance</h3>
-            <div style="margin-bottom: 10px;">
+            <div class="input-group">
                 <label>Stations Over Takt</label>
-                <input type="text" id="over-takt" readonly style="background: #f3f4f6; cursor: not-allowed;">
+                <input type="text" id="over-takt" readonly style="background:#f3f4f6;cursor:not-allowed">
             </div>
-            <div style="margin-bottom: 10px;">
+            <div class="input-group">
                 <label>Line Balance Rate</label>
-                <input type="text" id="balance-rate" readonly style="background: #f3f4f6; cursor: not-allowed;">
+                <input type="text" id="balance-rate" readonly style="background:#f3f4f6;cursor:not-allowed">
             </div>
-            <div>
-                <button class="btn btn-secondary" onclick="optimizeLine()" style="width: 100%; margin-top: 10px;">🚀 Optimize</button>
-            </div>
+            <button class="btn btn-secondary" onclick="optimizeLine()" style="width:100%;margin-top:10px">🚀 Optimize</button>
         </div>
     </div>
 
@@ -206,17 +197,25 @@ if (!window.location.search.includes('token=securelink123')) {
         </div>
     </div>
 
-    <!-- Station Slot Analysis (Editable) -->
-    <div class="card" style="margin-top: 24px; overflow-x: auto;">
-        <h3>📋 Station Slot Analysis - Click to Edit Cycle Times</h3>
+    <!-- Yamazumi Chart -->
+    <div class="card">
+        <h3>🗼 Yamazumi Chart - Work Element Stack by Station</h3>
+        <p class="hint-text" style="margin-top:-6px">Click any station bar to add or edit work elements. Takt line shown in red.</p>
+        <div class="yamazumi-container">
+            <canvas id="yamazumiChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Station Slot Analysis -->
+    <div class="card" style="margin-top:24px;overflow-x:auto">
+        <h3>📋 Station Slot Analysis - Click name or cycle time to edit</h3>
         <table>
-            <thead id="tableHeader">
+            <thead>
                 <tr>
                     <th>Station</th>
                     <th>Type</th>
-                    <th id="timeHeader1">Cycle Time (s)</th>
-                    <th id="timeHeader2">RH Time (s)</th>
-                    <th>Total (s)</th>
+                    <th>Cycle Time (s)</th>
+                    <th>Work Elements</th>
                     <th>Load %</th>
                     <th>Status</th>
                 </tr>
@@ -225,37 +224,62 @@ if (!window.location.search.includes('token=securelink123')) {
         </table>
     </div>
 
-    <!-- AI Insights Section -->
+    <!-- AI Insights -->
     <div class="ai-box">
-        <h3>🤖 AI Insights & Recommendations</h3>
+        <h3>🤖 AI Insights &amp; Recommendations</h3>
         <div id="aiInsights">
-            <p style="text-align: center; opacity: 0.8;">Run calculations to see AI recommendations...</p>
+            <p style="text-align:center;opacity:0.8">Run calculations to see AI recommendations...</p>
         </div>
     </div>
 </div>
 
-<!-- Modal for Editing Metrics -->
-<div id="editModal" class="modal">
+<!-- Work Elements Modal -->
+<div id="weModal" class="modal">
     <div class="modal-content">
-        <h2>Edit Metric</h2>
+        <h2 id="weModalTitle">Work Elements</h2>
         <div class="input-group">
-            <label id="modalLabel">Value</label>
-            <input type="number" id="modalInput" style="margin-bottom: 20px;">
+            <label>Element Name</label>
+            <input type="text" id="weName" placeholder="e.g. Torque bolt A">
+        </div>
+        <div class="input-group">
+            <label>Duration (seconds)</label>
+            <input type="number" id="weDuration" placeholder="0.0" step="0.1">
+        </div>
+        <div class="input-group">
+            <label>Category</label>
+            <div id="catPickerAdd" style="margin-bottom:10px"></div>
+        </div>
+        <button class="btn btn-secondary" onclick="addWorkElement()" style="width:100%">➕ Add Element</button>
+        <div id="weList" style="margin-top:12px"></div>
+        <div class="modal-buttons">
+            <button class="btn" onclick="closeWeModal()">Done</button>
+        </div>
+    </div>
+</div>
+
+<!-- Category Manager Modal -->
+<div id="catModal" class="modal">
+    <div class="modal-content">
+        <h2>🏷️ Manage Categories</h2>
+        <div id="catList" style="margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+            <input type="text" id="newCatName" placeholder="Category name" style="flex:1;min-width:120px;margin-bottom:0">
+            <input type="color" id="newCatColor" value="#3b82f6" style="width:44px;padding:2px;height:38px;margin-bottom:0">
+            <button class="btn btn-secondary" onclick="addCategory()">Add</button>
         </div>
         <div class="modal-buttons">
-            <button class="btn" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-secondary" onclick="saveMetricEdit()">Save</button>
+            <button class="btn" onclick="closeCatModal()">Done</button>
         </div>
     </div>
 </div>
 
-<!-- Modal for Editing Station Name -->
+<!-- Station Name Modal -->
 <div id="stationNameModal" class="modal">
     <div class="modal-content">
         <h2>Edit Station Name</h2>
         <div class="input-group">
             <label id="stationNameLabel">Station Name</label>
-            <input type="text" id="stationNameInput" style="margin-bottom: 20px;" placeholder="e.g., Assembly, Welding, Inspection">
+            <input type="text" id="stationNameInput" placeholder="e.g. Assembly, Welding, Inspection">
         </div>
         <div class="modal-buttons">
             <button class="btn" onclick="closeStationNameModal()">Cancel</button>
@@ -264,13 +288,13 @@ if (!window.location.search.includes('token=securelink123')) {
     </div>
 </div>
 
-<!-- Modal for Editing Station Cycle Time -->
+<!-- Station Cycle Time Modal -->
 <div id="stationModal" class="modal">
     <div class="modal-content">
-        <h2>Edit Station Cycle Time</h2>
+        <h2>Edit Cycle Time</h2>
         <div class="input-group">
             <label id="stationLabel">Cycle Time (seconds)</label>
-            <input type="number" id="stationInput" style="margin-bottom: 20px;" step="0.1">
+            <input type="number" id="stationInput" step="0.1">
         </div>
         <div class="modal-buttons">
             <button class="btn" onclick="closeStationModal()">Cancel</button>
@@ -285,301 +309,417 @@ if (!window.location.search.includes('token=securelink123')) {
         days: 5,
         hours: 8,
         seats: 10,
-        lpt: 40,
         lineType: 'R1s',
         stationCycleTimes: [],
         stationNames: [],
-        currentOps: 8,
-        targetUPH: 0
+        workElements: {},
+        categories: [
+            { id: 'c1', name: 'Manual',  color: '#3b82f6' },
+            { id: 'c2', name: 'Walk',    color: '#22c55e' },
+            { id: 'c3', name: 'Wait',    color: '#f59e0b' },
+            { id: 'c4', name: 'Machine', color: '#8b5cf6' }
+        ],
+        buildTimeOverride: false
     };
 
-    let myChart = null;
-    let paretoChart = null;
-    let editingMetric = '';
-    let editingStationIndex = -1;
-    let editingNameIndex = -1;
+    let myChart = null, paretoChart = null, yamazumiChart = null;
+    let editingStationIndex = -1, editingNameIndex = -1;
+    let selectedCatId = null;
+
+    function catById(id) { return state.categories.find(c => c.id === id); }
+    function catColor(id) { const c = catById(id); return c ? c.color : '#94a3b8'; }
+    function catName(id)  { const c = catById(id); return c ? c.name  : 'Uncategorised'; }
+
+    function calcTakt() {
+        const daily = Math.ceil(state.target / state.days);
+        const uph   = daily / state.hours;
+        return 3600 / uph;
+    }
+
+    function sumCycleTimes() {
+        return state.stationCycleTimes.slice(0, state.seats).reduce((a, b) => a + parseFloat(b || 0), 0);
+    }
+
+    function onBuildTimeInput() {
+        state.buildTimeOverride = true;
+        calculate();
+    }
 
     function calculate() {
-        state.target = parseFloat(document.getElementById('target').value) || 0;
-        state.days = parseFloat(document.getElementById('days').value) || 1;
-        state.hours = parseFloat(document.getElementById('hours').value) || 1;
-        state.seats = parseInt(document.getElementById('seats').value) || 1;
-        state.lpt = parseFloat(document.getElementById('lpt').value) || 0;
+        state.target   = parseFloat(document.getElementById('target').value)  || 0;
+        state.days     = parseFloat(document.getElementById('days').value)    || 1;
+        state.hours    = parseFloat(document.getElementById('hours').value)   || 1;
+        state.seats    = parseInt(document.getElementById('seats').value)     || 1;
         state.lineType = document.getElementById('lineType').value;
 
-        const dailyTarget = Math.ceil(state.target / state.days);
-        const uph = dailyTarget / state.hours;
-        const takt = 3600 / uph;
-        const requiredOps = Math.ceil((state.lpt / takt) * state.seats);
+        const daily = Math.ceil(state.target / state.days);
+        const uph   = daily / state.hours;
+        const takt  = 3600 / uph;
 
-        document.getElementById('val-daily').innerText = dailyTarget;
-        document.getElementById('val-uph').innerText = uph.toFixed(1);
-        document.getElementById('val-takt').innerText = takt.toFixed(1) + 's';
-        document.getElementById('val-ops').innerText = requiredOps;
-
-        if (!document.getElementById('target-uph').value) {
-            document.getElementById('target-uph').value = uph.toFixed(1);
+        // Initialise station data for new stations
+        while (state.stationCycleTimes.length < state.seats) {
+            const i = state.stationCycleTimes.length;
+            state.stationCycleTimes.push((takt * (0.85 + Math.random() * 0.20)).toFixed(1));
+            state.stationNames.push('Station ' + (i + 1));
+            if (!state.workElements['s' + i]) state.workElements['s' + i] = [];
         }
 
-        const header1 = document.getElementById('timeHeader1');
-        const header2 = document.getElementById('timeHeader2');
-        if (state.lineType === 'EDV') {
-            header1.innerText = 'Cycle Time (s)';
-            header2.style.display = 'none';
-        } else {
-            header1.innerText = 'LH Time (s)';
-            header2.style.display = '';
-        }
-
-        if (state.stationCycleTimes.length === 0) {
-            for (let i = 0; i < state.seats; i++) {
-                let variance = 0.85 + (Math.random() * 0.20);
-                state.stationCycleTimes[i] = (state.lpt * variance).toFixed(1);
-                state.stationNames[i] = `Station ${i + 1}`;
-            }
-        } else if (state.stationNames.length < state.seats) {
-            // Add names for new stations if count increased
-            for (let i = state.stationNames.length; i < state.seats; i++) {
-                let variance = 0.85 + (Math.random() * 0.20);
-                state.stationCycleTimes[i] = (state.lpt * variance).toFixed(1);
-                state.stationNames[i] = `Station ${i + 1}`;
+        // Sync cycle times from work elements
+        for (let i = 0; i < state.seats; i++) {
+            const wes = state.workElements['s' + i] || [];
+            if (wes.length > 0) {
+                state.stationCycleTimes[i] = wes.reduce((a, b) => a + b.duration, 0).toFixed(1);
             }
         }
+
+        // Build time field: auto-sum unless overridden
+        if (!state.buildTimeOverride) {
+            document.getElementById('totalBuildTime').value = sumCycleTimes().toFixed(1);
+        }
+        const buildTime = parseFloat(document.getElementById('totalBuildTime').value) || sumCycleTimes() || 1;
+        const reqOps = Math.ceil(buildTime / takt);
+
+        document.getElementById('val-daily').innerText = daily;
+        document.getElementById('val-uph').innerText   = uph.toFixed(1);
+        document.getElementById('val-takt').innerText  = takt.toFixed(1) + 's';
+        document.getElementById('val-ops').innerText   = reqOps;
 
         updateTableAndCharts(takt);
         calculateEfficiency();
-        generateAIInsights(takt, uph, requiredOps, dailyTarget);
+        generateAIInsights(takt, uph, reqOps, daily);
     }
 
     function updateTableAndCharts(takt) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
-
-        let labels = [];
-        let totalTimes = [];
-        let barColors = [];
-        let loads = [];
+        const labels = [], totalTimes = [], barColors = [];
         let overTaktCount = 0;
 
         for (let i = 0; i < state.seats; i++) {
-            const cycleTime = parseFloat(state.stationCycleTimes[i]) || 0;
-            const isOver = cycleTime > takt;
-            const statusText = isOver ? '⚠️ OVER TAKT' : '✅ OK';
-            const statusClass = isOver ? 'status-over' : 'status-ok';
-            const loadPercent = ((cycleTime / takt) * 100).toFixed(1);
-            const loadClass = loadPercent > 100 ? 'status-over' : (loadPercent > 85 ? 'status-warning' : 'status-ok');
-
+            const ct = parseFloat(state.stationCycleTimes[i]) || 0;
+            const isOver = ct > takt;
+            const load   = ((ct / takt) * 100).toFixed(1);
+            const loadCls = isOver ? 'status-over' : (load > 85 ? 'status-warning' : 'status-ok');
             if (isOver) overTaktCount++;
-
-            labels.push(`S${i + 1}`);
-            totalTimes.push(cycleTime);
-            loads.push(loadPercent);
+            labels.push('S' + (i + 1));
+            totalTimes.push(ct);
             barColors.push(isOver ? '#ef4444' : '#3b82f6');
 
-            const stationName = state.stationNames[i] || `Station ${i + 1}`;
+            const wes = state.workElements['s' + i] || [];
+            const weHtml = wes.length
+                ? wes.map(w => `<span class="tag" style="background:${catColor(w.catId)}22;color:${catColor(w.catId)}">${w.name} ${w.duration}s</span>`).join('')
+                : '<span style="color:#94a3b8;font-size:0.75rem">none</span>';
 
-            tbody.innerHTML += `
-                <tr>
-                    <td class="editable-cell" onclick="editStationName(${i}, '${stationName}')"><strong>${stationName}</strong></td>
-                    <td>${state.lineType}</td>
-                    <td class="editable-cell" onclick="editStationCycleTime(${i}, ${cycleTime})">${cycleTime}</td>
-                    <td class="hidden-column"></td>
-                    <td>${cycleTime}</td>
-                    <td class="${loadClass}">${loadPercent}%</td>
-                    <td class="${statusClass}">${statusText}</td>
-                </tr>
-            `;
+            tbody.innerHTML += `<tr>
+                <td class="editable-cell" onclick="editStationName(${i})">${state.stationNames[i]}</td>
+                <td>${state.lineType}</td>
+                <td class="editable-cell" onclick="editStationCycleTime(${i}, ${ct})">${ct}</td>
+                <td>${weHtml} <span class="editable-cell" onclick="openWeModal(${i})" style="font-size:0.75rem;margin-left:4px">✏️ edit</span></td>
+                <td class="${loadCls}">${load}%</td>
+                <td class="${isOver ? 'status-over' : 'status-ok'}">${isOver ? '⚠️ OVER TAKT' : '✅ OK'}</td>
+            </tr>`;
         }
 
-        const avgCycle = (totalTimes.reduce((a, b) => a + parseFloat(b), 0) / state.seats).toFixed(1);
-        const variance = calculateVariance(totalTimes);
-        const maxCycle = Math.max(...totalTimes.map(t => parseFloat(t)));
-        const bottleneck = labels[totalTimes.map(t => parseFloat(t)).indexOf(maxCycle)];
+        const avg     = (totalTimes.reduce((a, b) => a + b, 0) / state.seats).toFixed(1);
+        const stddev  = calcVariance(totalTimes);
+        const maxCt   = Math.max(...totalTimes);
+        const bn      = labels[totalTimes.indexOf(maxCt)];
+        const br      = (((state.seats * takt) / (state.seats * maxCt)) * 100).toFixed(1);
 
-        document.getElementById('avg-cycle').value = avgCycle + ' s';
-        document.getElementById('variance').value = variance.toFixed(2);
-        document.getElementById('bottleneck').value = bottleneck;
-        document.getElementById('over-takt').value = overTaktCount + ' / ' + state.seats;
-
-        const balanceRate = (((state.seats * takt) / (state.seats * maxCycle)) * 100).toFixed(1);
-        document.getElementById('balance-rate').value = balanceRate + '%';
+        document.getElementById('avg-cycle').value    = avg + ' s';
+        document.getElementById('variance').value     = stddev.toFixed(2);
+        document.getElementById('bottleneck').value   = bn;
+        document.getElementById('over-takt').value    = overTaktCount + ' / ' + state.seats;
+        document.getElementById('balance-rate').value = br + '%';
 
         updateLineBalanceChart(labels, totalTimes, barColors, takt);
         updateParetoChart(labels, totalTimes, takt);
+        updateYamazumiChart(labels, takt);
     }
 
-    function calculateVariance(values) {
-        const avg = values.reduce((a, b) => a + parseFloat(b), 0) / values.length;
-        const squareDiffs = values.map(v => Math.pow(parseFloat(v) - avg, 2));
-        return Math.sqrt(squareDiffs.reduce((a, b) => a + b) / values.length);
+    function calcVariance(values) {
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        return Math.sqrt(values.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / values.length);
     }
 
     function updateLineBalanceChart(labels, times, colors, takt) {
         const ctx = document.getElementById('balanceChart');
-        if (!ctx) return;
-
         if (myChart) myChart.destroy();
-
-        const taktLine = Array(labels.length).fill(takt.toFixed(1));
-
         myChart = new Chart(ctx.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: labels,
+                labels,
                 datasets: [
-                    {
-                        type: 'line',
-                        label: `Takt Time (${takt.toFixed(1)}s)`,
-                        data: taktLine,
-                        borderColor: '#ef4444',
-                        borderWidth: 3,
-                        borderDash: [5, 5],
-                        fill: false,
-                        pointRadius: 0,
-                        tension: 0
-                    },
-                    {
-                        type: 'bar',
-                        label: 'Cycle Time (s)',
-                        data: times,
-                        backgroundColor: colors,
-                        borderRadius: 4
-                    }
+                    { type: 'line', label: `Takt Time (${takt.toFixed(1)}s)`, data: Array(labels.length).fill(parseFloat(takt.toFixed(1))), borderColor: '#ef4444', borderWidth: 3, borderDash: [5,5], fill: false, pointRadius: 0 },
+                    { type: 'bar',  label: 'Cycle Time (s)', data: times, backgroundColor: colors, borderRadius: 4 }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, title: { display: true, text: 'Seconds' } }
-                },
-                plugins: {
-                    legend: { display: true, position: 'top' }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Seconds' } } }, plugins: { legend: { display: true, position: 'top' } } }
         });
     }
 
     function updateParetoChart(labels, times, takt) {
         const ctx = document.getElementById('paretoChart');
-        if (!ctx) return;
-
         if (paretoChart) paretoChart.destroy();
-
-        const deviations = times.map(t => Math.max(0, parseFloat(t) - takt));
-        const sorted = deviations.map((val, idx) => ({ val, label: labels[idx] }))
-                                  .sort((a, b) => b.val - a.val);
-
-        const sortedLabels = sorted.map(s => s.label);
-        const sortedValues = sorted.map(s => s.val);
-        const cumulativePercent = [];
-        let cumsum = 0;
-        const total = sortedValues.reduce((a, b) => a + b, 0) || 1;
-
-        sortedValues.forEach(val => {
-            cumsum += val;
-            cumulativePercent.push((cumsum / total * 100).toFixed(1));
-        });
-
+        const devs   = times.map(t => Math.max(0, t - takt));
+        const sorted = devs.map((v, i) => ({ v, l: labels[i] })).sort((a, b) => b.v - a.v);
+        const sl = sorted.map(s => s.l), sv = sorted.map(s => s.v);
+        let cum = 0;
+        const tot = sv.reduce((a, b) => a + b, 0) || 1;
+        const cp  = sv.map(v => { cum += v; return ((cum / tot) * 100).toFixed(1); });
         paretoChart = new Chart(ctx.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: sortedLabels,
+                labels: sl,
                 datasets: [
-                    {
-                        type: 'bar',
-                        label: 'Over-Takt Deviation (s)',
-                        data: sortedValues,
-                        backgroundColor: '#ef4444',
-                        yAxisID: 'y',
-                        borderRadius: 4
-                    },
-                    {
-                        type: 'line',
-                        label: 'Cumulative %',
-                        data: cumulativePercent,
-                        borderColor: '#3b82f6',
-                        borderWidth: 2,
-                        yAxisID: 'y1',
-                        fill: false,
-                        pointRadius: 4
-                    }
+                    { type: 'bar',  label: 'Over-Takt Deviation (s)', data: sv, backgroundColor: '#ef4444', yAxisID: 'y', borderRadius: 4 },
+                    { type: 'line', label: 'Cumulative %', data: cp, borderColor: '#3b82f6', borderWidth: 2, yAxisID: 'y1', fill: false, pointRadius: 4 }
                 ]
             },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { type: 'linear', position: 'left', beginAtZero: true }, y1: { type: 'linear', position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } } }, plugins: { legend: { display: true, position: 'top' } } }
+        });
+    }
+
+    function updateYamazumiChart(labels, takt) {
+        const ctx = document.getElementById('yamazumiChart');
+        if (yamazumiChart) yamazumiChart.destroy();
+
+        // Build category stacks
+        const catMap = {};
+        state.categories.forEach(c => { catMap[c.id] = { name: c.name, color: c.color, data: Array(state.seats).fill(0) }; });
+        catMap['__none'] = { name: 'Uncategorised', color: '#94a3b8', data: Array(state.seats).fill(0) };
+
+        for (let i = 0; i < state.seats; i++) {
+            const wes = state.workElements['s' + i] || [];
+            if (wes.length === 0) {
+                catMap['__none'].data[i] = parseFloat(state.stationCycleTimes[i]) || 0;
+            } else {
+                wes.forEach(w => {
+                    const k = w.catId && catMap[w.catId] ? w.catId : '__none';
+                    catMap[k].data[i] += w.duration;
+                });
+            }
+        }
+
+        const datasets = Object.values(catMap)
+            .filter(v => v.data.some(d => d > 0))
+            .map(v => ({ label: v.name, data: v.data.slice(0, state.seats), backgroundColor: v.color, borderRadius: 2 }));
+
+        datasets.push({
+            type: 'line',
+            label: 'Takt Time (' + takt.toFixed(1) + 's)',
+            data: Array(state.seats).fill(parseFloat(takt.toFixed(1))),
+            borderColor: '#ef4444',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0,
+            order: 0
+        });
+
+        yamazumiChart = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: { labels, datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                    y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Deviation (s)' } },
-                    y1: { type: 'linear', position: 'right', min: 0, max: 100, title: { display: true, text: 'Cumulative %' }, grid: { drawOnChartArea: false } }
+                onClick: (evt) => {
+                    const pts = yamazumiChart.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true);
+                    if (pts.length) openWeModal(pts[0].index);
                 },
-                plugins: { legend: { display: true, position: 'top' } }
+                scales: {
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Seconds' } },
+                    x: { stacked: true }
+                },
+                plugins: { legend: { display: true, position: 'top' }, tooltip: { mode: 'index', intersect: false } }
             }
         });
     }
 
     function calculateEfficiency() {
-        const currentOps = parseFloat(document.getElementById('current-ops').value) || 1;
-        const targetUPH = parseFloat(document.getElementById('target-uph').value) || parseFloat(document.getElementById('val-uph').innerText) || 1;
-        const requiredOps = parseFloat(document.getElementById('val-ops').innerText) || 1;
-        
-        const efficiency = ((requiredOps / currentOps) * 100).toFixed(1);
-        document.getElementById('efficiency').value = efficiency + '%';
+        const cur    = parseFloat(document.getElementById('current-ops').value) || 1;
+        const reqOps = parseFloat(document.getElementById('val-ops').innerText) || 1;
+        document.getElementById('efficiency').value = ((reqOps / cur) * 100).toFixed(1) + '%';
     }
 
-    function generateAIInsights(takt, uph, requiredOps, dailyTarget) {
-        const overTaktCount = state.stationCycleTimes.filter(t => parseFloat(t) > takt).length;
-        const currentOps = parseFloat(document.getElementById('current-ops').value) || 1;
-        const efficiency = (requiredOps / currentOps) * 100;
+    function generateAIInsights(takt, uph, reqOps, daily) {
+        const over  = state.stationCycleTimes.slice(0, state.seats).filter(t => parseFloat(t) > takt).length;
+        const cur   = parseFloat(document.getElementById('current-ops').value) || 1;
+        const eff   = (reqOps / cur) * 100;
+        const br    = parseFloat(document.getElementById('balance-rate').value) || 80;
+        const avgC  = parseFloat(document.getElementById('avg-cycle').value) || takt;
+        let ins = [];
 
-        let insights = [];
-
-        if (overTaktCount > 0) {
-            insights.push(`<strong>🚨 Critical Issue:</strong> ${overTaktCount} station(s) exceed takt time. This will cause line starvation and reduce throughput.`);
-            insights.push(`<strong>💡 Action:</strong> Consider process improvements or rebalancing work elements to stations with excess capacity.`);
+        if (over > 0) {
+            ins.push(`<strong>🚨 Critical:</strong> ${over} station(s) exceed takt time — line starvation risk. Click station bars in the Yamazumi to rebalance work elements.`);
         }
-
-        if (efficiency > 100) {
-            insights.push(`<strong>⚠️ Understaffed:</strong> Currently have ${Math.round(currentOps)} operators, but need ${Math.round(requiredOps)} for target throughput.`);
-            insights.push(`<strong>💡 Recommendation:</strong> Add ${Math.round(requiredOps - currentOps)} more operators to meet the ${dailyTarget} unit/day target.`);
-        } else if (efficiency < 70) {
-            insights.push(`<strong>✅ Well Staffed:</strong> You have adequate operators (${Math.round(efficiency)}% utilization).`);
-            insights.push(`<strong>💡 Opportunity:</strong> Consider reducing staff or increasing target to improve labor utilization.`);
+        if (eff > 100) {
+            ins.push(`<strong>⚠️ Understaffed:</strong> Need ${reqOps} operators, have ${Math.round(cur)}. Add ${reqOps - Math.round(cur)} more to hit ${daily} units/day.`);
+        } else if (eff < 70) {
+            ins.push(`<strong>✅ Overstaffed:</strong> Only ${Math.round(eff)}% utilisation. Consider reducing operators or raising weekly target.`);
         } else {
-            insights.push(`<strong>📊 Balanced Staffing:</strong> Current staffing level is well-aligned (${Math.round(efficiency)}% utilization).`);
+            ins.push(`<strong>📊 Staffing balanced:</strong> ${Math.round(eff)}% utilisation — well aligned to target.`);
+        }
+        if (br < 75) {
+            ins.push(`<strong>📉 Poor balance rate:</strong> ${br}% — redistributing work elements could recover up to ${(100 - br).toFixed(1)}% efficiency.`);
+        }
+        if (avgC < takt * 0.7) {
+            ins.push(`<strong>💪 Headroom detected:</strong> Average cycle time is well below takt. Consider raising the weekly target.`);
         }
 
-        const avgCycle = parseFloat(document.getElementById('avg-cycle').value) || takt;
-        if (avgCycle < takt * 0.7) {
-            insights.push(`<strong>💪 High Capacity:</strong> Average cycle time is significantly below takt. Consider increasing production targets.`);
-        }
-
-        const balanceRate = parseFloat(document.getElementById('balance-rate').value) || 80;
-        if (balanceRate < 75) {
-            insights.push(`<strong>📉 Poor Balance:</strong> Line balance rate is ${balanceRate.toFixed(1)}%. Work rebalancing could improve efficiency by ${(100 - balanceRate).toFixed(1)}%.`);
-        }
-
-        document.getElementById('aiInsights').innerHTML = insights
-            .map(insight => `<div class="ai-suggestion">${insight}</div>`)
-            .join('');
+        document.getElementById('aiInsights').innerHTML = ins.map(t => `<div class="ai-suggestion">${t}</div>`).join('');
     }
 
-    function editStationCycleTime(index, currentValue) {
-        editingStationIndex = index;
-        const stationName = state.stationNames[index] || `Station ${index + 1}`;
-        document.getElementById('stationLabel').innerText = `${stationName} - Cycle Time (seconds)`;
-        document.getElementById('stationInput').value = currentValue;
+    // ── Work elements modal ──────────────────────────────────────────────────
+    function openWeModal(idx) {
+        editingStationIndex = idx;
+        selectedCatId = state.categories.length ? state.categories[0].id : '__none';
+        document.getElementById('weModalTitle').innerText = 'Work Elements — ' + state.stationNames[idx];
+        document.getElementById('weName').value    = '';
+        document.getElementById('weDuration').value = '';
+        renderCatPicker('catPickerAdd');
+        renderWeList();
+        document.getElementById('weModal').classList.add('active');
+        document.getElementById('weName').focus();
+    }
+
+    function closeWeModal() {
+        document.getElementById('weModal').classList.remove('active');
+        editingStationIndex = -1;
+        state.buildTimeOverride = false;
+        calculate();
+    }
+
+    function renderCatPicker(containerId) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.innerHTML = state.categories.map(c =>
+            `<span class="cat-pill${selectedCatId === c.id ? ' selected' : ''}"
+                style="background:${c.color}"
+                onclick="selectCat('${c.id}','${containerId}')">${c.name}</span>`
+        ).join('');
+    }
+
+    function selectCat(id, containerId) {
+        selectedCatId = id;
+        renderCatPicker(containerId);
+    }
+
+    function renderWeList() {
+        const wes = state.workElements['s' + editingStationIndex] || [];
+        const el  = document.getElementById('weList');
+        if (!wes.length) { el.innerHTML = '<div style="color:#94a3b8;font-size:0.82rem">No elements yet.</div>'; return; }
+        el.innerHTML = wes.map((w, i) => `
+            <div class="we-row">
+                <span class="color-dot" style="background:${catColor(w.catId)}"></span>
+                <span style="flex:1">${w.name}</span>
+                <span style="color:#64748b">${w.duration}s</span>
+                <span class="tag" style="background:${catColor(w.catId)}22;color:${catColor(w.catId)}">${catName(w.catId)}</span>
+                <button class="btn btn-danger" style="padding:2px 8px;font-size:0.75rem" onclick="removeWe(${i})">×</button>
+            </div>`).join('');
+    }
+
+    function addWorkElement() {
+        const nm  = document.getElementById('weName').value.trim();
+        const dur = parseFloat(document.getElementById('weDuration').value);
+        if (!nm || isNaN(dur) || dur <= 0) return;
+        if (!state.workElements['s' + editingStationIndex]) state.workElements['s' + editingStationIndex] = [];
+        state.workElements['s' + editingStationIndex].push({ name: nm, duration: dur, catId: selectedCatId || '__none' });
+        document.getElementById('weName').value    = '';
+        document.getElementById('weDuration').value = '';
+        // Update cycle time for this station
+        const sum = state.workElements['s' + editingStationIndex].reduce((a, b) => a + b.duration, 0);
+        state.stationCycleTimes[editingStationIndex] = sum.toFixed(1);
+        state.buildTimeOverride = false;
+        document.getElementById('totalBuildTime').value = sumCycleTimes().toFixed(1);
+        renderWeList();
+        document.getElementById('weName').focus();
+    }
+
+    function removeWe(idx) {
+        state.workElements['s' + editingStationIndex].splice(idx, 1);
+        const wes = state.workElements['s' + editingStationIndex];
+        state.stationCycleTimes[editingStationIndex] = wes.length
+            ? wes.reduce((a, b) => a + b.duration, 0).toFixed(1)
+            : state.stationCycleTimes[editingStationIndex];
+        state.buildTimeOverride = false;
+        document.getElementById('totalBuildTime').value = sumCycleTimes().toFixed(1);
+        renderWeList();
+    }
+
+    // ── Category manager modal ───────────────────────────────────────────────
+    function manageCats() {
+        renderCatManager();
+        document.getElementById('catModal').classList.add('active');
+    }
+
+    function closeCatModal() {
+        document.getElementById('catModal').classList.remove('active');
+        calculate();
+    }
+
+    function renderCatManager() {
+        const el = document.getElementById('catList');
+        el.innerHTML = state.categories.map((c, i) => `
+            <div class="cat-row">
+                <span style="width:14px;height:14px;border-radius:3px;background:${c.color};display:inline-block;flex-shrink:0"></span>
+                <span style="flex:1;font-size:0.85rem">${c.name}</span>
+                <button class="btn btn-danger" style="padding:4px 10px;font-size:0.78rem" onclick="removeCat(${i})">Remove</button>
+            </div>`).join('');
+    }
+
+    function addCategory() {
+        const nm  = document.getElementById('newCatName').value.trim();
+        const clr = document.getElementById('newCatColor').value;
+        if (!nm) return;
+        state.categories.push({ id: 'c' + Date.now(), name: nm, color: clr });
+        document.getElementById('newCatName').value = '';
+        renderCatManager();
+    }
+
+    function removeCat(i) {
+        const id = state.categories[i].id;
+        state.categories.splice(i, 1);
+        Object.values(state.workElements).forEach(arr => arr.forEach(w => { if (w.catId === id) w.catId = '__none'; }));
+        renderCatManager();
+    }
+
+    // ── Station name/cycle edit modals ───────────────────────────────────────
+    function editStationName(idx) {
+        editingNameIndex = idx;
+        document.getElementById('stationNameLabel').innerText = 'Rename Station ' + (idx + 1);
+        document.getElementById('stationNameInput').value = state.stationNames[idx];
+        document.getElementById('stationNameModal').classList.add('active');
+        document.getElementById('stationNameInput').focus();
+        document.getElementById('stationNameInput').select();
+    }
+
+    function saveStationNameEdit() {
+        const v = document.getElementById('stationNameInput').value.trim();
+        if (editingNameIndex >= 0 && v) { state.stationNames[editingNameIndex] = v; calculate(); }
+        closeStationNameModal();
+    }
+
+    function closeStationNameModal() {
+        document.getElementById('stationNameModal').classList.remove('active');
+        editingNameIndex = -1;
+    }
+
+    function editStationCycleTime(idx, cur) {
+        editingStationIndex = idx;
+        document.getElementById('stationLabel').innerText = state.stationNames[idx] + ' — Cycle Time (s)';
+        document.getElementById('stationInput').value = cur;
         document.getElementById('stationModal').classList.add('active');
         document.getElementById('stationInput').focus();
     }
 
     function saveStationEdit() {
-        const newValue = parseFloat(document.getElementById('stationInput').value);
-        if (editingStationIndex >= 0 && !isNaN(newValue)) {
-            state.stationCycleTimes[editingStationIndex] = newValue.toFixed(1);
-            const takt = 3600 / (parseFloat(document.getElementById('val-uph').innerText) || 1);
-            updateTableAndCharts(takt);
-            generateAIInsights(takt, parseFloat(document.getElementById('val-uph').innerText), parseFloat(document.getElementById('val-ops').innerText), parseFloat(document.getElementById('val-daily').innerText));
+        const v = parseFloat(document.getElementById('stationInput').value);
+        if (editingStationIndex >= 0 && !isNaN(v)) {
+            state.stationCycleTimes[editingStationIndex] = v.toFixed(1);
+            state.workElements['s' + editingStationIndex] = []; // clear elements when manually overriding
+            state.buildTimeOverride = false;
+            calculate();
         }
         closeStationModal();
     }
@@ -589,99 +729,53 @@ if (!window.location.search.includes('token=securelink123')) {
         editingStationIndex = -1;
     }
 
-    function editStationName(index, currentName) {
-        editingNameIndex = index;
-        document.getElementById('stationNameLabel').innerText = `Rename Station ${index + 1}`;
-        document.getElementById('stationNameInput').value = currentName;
-        document.getElementById('stationNameModal').classList.add('active');
-        document.getElementById('stationNameInput').focus();
-        document.getElementById('stationNameInput').select();
-    }
-
-    function saveStationNameEdit() {
-        const newName = document.getElementById('stationNameInput').value.trim();
-        if (editingNameIndex >= 0 && newName) {
-            state.stationNames[editingNameIndex] = newName;
-            const takt = 3600 / (parseFloat(document.getElementById('val-uph').innerText) || 1);
-            updateTableAndCharts(takt);
-        }
-        closeStationNameModal();
-    }
-
-    function closeStationNameModal() {
-        document.getElementById('stationNameModal').classList.remove('active');
-        editingNameIndex = -1;
-    }
-
-    function editMetric(metric) {
-        editingMetric = metric;
-        let labels = { daily: 'Daily Target', uph: 'Required UPH', takt: 'Takt Time', ops: 'Required Operators' };
-        let values = { daily: document.getElementById('val-daily').innerText, uph: document.getElementById('val-uph').innerText, takt: document.getElementById('val-takt').innerText.replace('s', ''), ops: document.getElementById('val-ops').innerText };
-        
-        document.getElementById('modalLabel').innerText = labels[metric];
-        document.getElementById('modalInput').value = values[metric];
-        document.getElementById('editModal').classList.add('active');
-        document.getElementById('modalInput').focus();
-    }
-
-    function closeModal() {
-        document.getElementById('editModal').classList.remove('active');
-        editingMetric = '';
-    }
-
-    function saveMetricEdit() {
-        const newValue = parseFloat(document.getElementById('modalInput').value);
-        if (!isNaN(newValue)) {
-            const uph = parseFloat(document.getElementById('val-uph').innerText);
-            const takt = 3600 / uph;
-            
-            if (editingMetric === 'ops') {
-                document.getElementById('current-ops').value = newValue;
-                calculateEfficiency();
-            }
-        }
-        closeModal();
-    }
-
+    // ── Utilities ─────────────────────────────────────────────────────────────
     function optimizeLine() {
-        alert('Optimization feature: The system recommends rebalancing work elements starting from Station ' + document.getElementById('bottleneck').value + ' to reduce cycle time variance.');
+        alert('Optimization: Start rebalancing work elements from station ' + document.getElementById('bottleneck').value + ' to stations with spare capacity below takt.');
     }
 
     function resetData() {
         state.stationCycleTimes = [];
         state.stationNames = [];
-        document.getElementById('target').value = 4000;
-        document.getElementById('days').value = 5;
-        document.getElementById('hours').value = 8;
-        document.getElementById('seats').value = 10;
-        document.getElementById('lpt').value = 40;
+        state.workElements = {};
+        state.buildTimeOverride = false;
+        document.getElementById('target').value   = 4000;
+        document.getElementById('days').value     = 5;
+        document.getElementById('hours').value    = 8;
+        document.getElementById('seats').value    = 10;
         document.getElementById('current-ops').value = 8;
+        document.getElementById('lineType').value = 'R1s';
         calculate();
     }
 
     function exportCSV() {
-        let csv = "Station,LineType,CycleTime,Load%,Status\n";
-        const rows = document.querySelectorAll("#tableBody tr");
-        rows.forEach(row => {
-            const cols = Array.from(row.querySelectorAll("td")).slice(0, 6).map(td => td.innerText.replace(/[⚠️✅]/g, '').trim());
-            csv += cols.join(",") + "\n";
-        });
-        
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'Line_Balance_Forecast.csv';
-        link.click();
+        const takt = calcTakt();
+        let csv = 'Station,Type,CycleTime(s),WorkElements,Load%,Status\n';
+        for (let i = 0; i < state.seats; i++) {
+            const ct   = parseFloat(state.stationCycleTimes[i]) || 0;
+            const load = ((ct / takt) * 100).toFixed(1);
+            const stat = ct > takt ? 'OVER TAKT' : 'OK';
+            const wes  = (state.workElements['s' + i] || []).map(w => w.name + '(' + w.duration + 's/' + catName(w.catId) + ')').join(';');
+            csv += `${state.stationNames[i]},${state.lineType},${ct},"${wes}",${load}%,${stat}\n`;
+        }
+        const a = document.createElement('a');
+        a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+        a.download = 'Line_Balance_Forecast.csv';
+        a.click();
     }
 
-    document.getElementById('current-ops').addEventListener('keypress', (e) => { if (e.key === 'Enter') calculateEfficiency(); });
-    document.getElementById('modalInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveMetricEdit(); });
-    document.getElementById('stationInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveStationEdit(); });
-    document.getElementById('stationNameInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') saveStationNameEdit(); });
+    // Keyboard shortcuts for modals
+    document.getElementById('stationNameInput').addEventListener('keypress', e => { if (e.key === 'Enter') saveStationNameEdit(); });
+    document.getElementById('stationInput').addEventListener('keypress', e => { if (e.key === 'Enter') saveStationEdit(); });
+    document.getElementById('weName').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('weDuration').focus(); });
+    document.getElementById('weDuration').addEventListener('keypress', e => { if (e.key === 'Enter') addWorkElement(); });
+
+    // Close modals on backdrop click
+    ['weModal','catModal','stationNameModal','stationModal'].forEach(id => {
+        document.getElementById(id).addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); });
+    });
 
     window.onload = calculate;
 </script>
-
 </body>
 </html>
