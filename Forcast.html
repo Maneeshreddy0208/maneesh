@@ -661,11 +661,26 @@ if (!window.location.search.includes('token=securelink123')) {
     function renderCatManager() {
         const el = document.getElementById('catList');
         el.innerHTML = state.categories.map((c, i) => `
-            <div class="cat-row">
-                <span style="width:14px;height:14px;border-radius:3px;background:${c.color};display:inline-block;flex-shrink:0"></span>
-                <span style="flex:1;font-size:0.85rem">${c.name}</span>
-                <button class="btn btn-danger" style="padding:4px 10px;font-size:0.78rem" onclick="removeCat(${i})">Remove</button>
+            <div class="cat-row" style="align-items:center">
+                <input type="color" value="${c.color}"
+                    style="width:32px;height:32px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;flex-shrink:0;margin-bottom:0"
+                    oninput="renameCat(${i}, null, this.value)">
+                <input type="text" value="${c.name}"
+                    style="flex:1;margin-bottom:0;font-size:0.85rem;padding:6px 10px"
+                    placeholder="Category name"
+                    oninput="renameCat(${i}, this.value, null)">
+                <button class="btn btn-danger" style="padding:4px 10px;font-size:0.78rem;margin-right:0;flex-shrink:0" onclick="removeCat(${i})">Remove</button>
             </div>`).join('');
+    }
+
+    function renameCat(i, newName, newColor) {
+        if (newName !== null) state.categories[i].name  = newName;
+        if (newColor !== null) state.categories[i].color = newColor;
+        // Live-update the color swatch next to the name input in the same row
+        const rows = document.querySelectorAll('#catList .cat-row');
+        if (rows[i] && newColor !== null) {
+            rows[i].querySelector('input[type="color"]').value = newColor;
+        }
     }
 
     function addCategory() {
