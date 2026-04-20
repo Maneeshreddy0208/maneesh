@@ -57,6 +57,12 @@
         .cat-pill.selected { border-color: var(--primary); }
         .cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .hint-text { font-size: 0.78rem; color: #64748b; margin-top: -8px; margin-bottom: 10px; }
+        /* save/load rows */
+        .save-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .save-row:last-child { border-bottom: none; }
+        .save-row .save-name { flex: 1; font-weight: 600; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .save-row .save-meta { font-size: 0.75rem; color: #64748b; white-space: nowrap; }
+        .save-empty { text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 20px 0; }
         /* drag-to-reorder rows */
         #tableBody tr { cursor: grab; transition: background 0.15s; }
         #tableBody tr:active { cursor: grabbing; }
@@ -79,6 +85,7 @@ if (!window.location.search.includes('token=securelink123')) {
         </div>
         <div>
             <button class="btn btn-secondary" onclick="manageCats()">🏷️ Categories</button>
+            <button class="btn btn-secondary" onclick="openSaveModal()">💾 Save / Load</button>
             <button class="btn btn-secondary" onclick="resetData()">🔄 Reset</button>
             <button class="btn" onclick="exportExcel()">📊 Export Excel</button>
         </div>
@@ -236,6 +243,39 @@ if (!window.location.search.includes('token=securelink123')) {
         <h3>🤖 AI Insights &amp; Recommendations</h3>
         <div id="aiInsights">
             <p style="text-align:center;opacity:0.8">Run calculations to see AI recommendations...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Save / Load Modal -->
+<div id="saveModal" class="modal">
+    <div class="modal-content" style="max-width:560px">
+        <h2>💾 Save &amp; Load</h2>
+
+        <!-- Save current state -->
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:18px">
+            <label style="margin-bottom:6px">Save current data as</label>
+            <div style="display:flex;gap:8px">
+                <input type="text" id="saveNameInput" placeholder="e.g. R1s Line Week 12" style="flex:1;margin-bottom:0">
+                <button class="btn btn-secondary" style="white-space:nowrap;margin-right:0" onclick="saveToFile()">⬇ Download JSON</button>
+            </div>
+        </div>
+
+        <!-- Saved sessions list -->
+        <div style="margin-bottom:10px;font-size:0.85rem;font-weight:600;color:var(--primary)">Saved sessions</div>
+        <div id="saveList" style="max-height:280px;overflow-y:auto;margin-bottom:16px"></div>
+
+        <!-- Upload JSON -->
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px">
+            <label style="margin-bottom:6px">Load from JSON file</label>
+            <div style="display:flex;gap:8px;align-items:center">
+                <input type="file" id="loadFileInput" accept=".json" style="flex:1;margin-bottom:0;font-size:0.82rem" onchange="loadFromFile(event)">
+            </div>
+            <p class="hint-text" style="margin-top:6px;margin-bottom:0">Select a previously downloaded JSON file to restore all station data, work elements and categories.</p>
+        </div>
+
+        <div class="modal-buttons">
+            <button class="btn" onclick="closeSaveModal()">Close</button>
         </div>
     </div>
 </div>
@@ -962,6 +1002,154 @@ if (!window.location.search.includes('token=securelink123')) {
         }
     }
 
+    // ── Save / Load ───────────────────────────────────────────────────────────
+    const STORAGE_KEY = 'mfg_forecaster_saves';
+
+    function getSaves() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+        catch(e) { return []; }
+    }
+
+    function putSaves(saves) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saves));
+    }
+
+    function openSaveModal() {
+        renderSaveList();
+        document.getElementById('saveNameInput').value = '';
+        document.getElementById('saveModal').classList.add('active');
+    }
+
+    function closeSaveModal() {
+        document.getElementById('saveModal').classList.remove('active');
+    }
+
+    function captureState() {
+        return {
+            target:            state.target,
+            days:              state.days,
+            hours:             state.hours,
+            seats:             state.seats,
+            lineType:          state.lineType,
+            stationCycleTimes: [...state.stationCycleTimes],
+            stationNames:      [...state.stationNames],
+            workElements:      JSON.parse(JSON.stringify(state.workElements)),
+            categories:        JSON.parse(JSON.stringify(state.categories)),
+            buildTimeOverride: state.buildTimeOverride,
+            totalBuildTime:    parseFloat(document.getElementById('totalBuildTime').value) || 0,
+            currentOps:        parseFloat(document.getElementById('current-ops').value) || 8
+        };
+    }
+
+    function applySnapshot(snap) {
+        state.target            = snap.target            ?? state.target;
+        state.days              = snap.days              ?? state.days;
+        state.hours             = snap.hours             ?? state.hours;
+        state.seats             = snap.seats             ?? state.seats;
+        state.lineType          = snap.lineType          ?? state.lineType;
+        state.stationCycleTimes = snap.stationCycleTimes ? [...snap.stationCycleTimes] : [];
+        state.stationNames      = snap.stationNames      ? [...snap.stationNames]      : [];
+        state.workElements      = snap.workElements      ? JSON.parse(JSON.stringify(snap.workElements)) : {};
+        state.categories        = snap.categories        ? JSON.parse(JSON.stringify(snap.categories))   : state.categories;
+        state.buildTimeOverride = snap.buildTimeOverride ?? false;
+
+        document.getElementById('target').value       = state.target;
+        document.getElementById('days').value         = state.days;
+        document.getElementById('hours').value        = state.hours;
+        document.getElementById('seats').value        = state.seats;
+        document.getElementById('lineType').value     = state.lineType;
+        document.getElementById('current-ops').value  = snap.currentOps ?? 8;
+        if (snap.totalBuildTime) {
+            document.getElementById('totalBuildTime').value = snap.totalBuildTime;
+        }
+        calculate();
+    }
+
+    function saveToFile() {
+        const nm = document.getElementById('saveNameInput').value.trim() || ('Save ' + new Date().toLocaleString());
+        const snap = captureState();
+
+        // Also persist to localStorage list
+        const saves = getSaves();
+        saves.unshift({ name: nm, date: new Date().toISOString(), data: snap });
+        putSaves(saves);
+        renderSaveList();
+
+        // Download JSON file
+        const blob = new Blob([JSON.stringify({ name: nm, date: new Date().toISOString(), data: snap }, null, 2)], { type: 'application/json' });
+        const a    = document.createElement('a');
+        a.href     = URL.createObjectURL(blob);
+        a.download = nm.replace(/[^a-z0-9_\-]/gi, '_') + '.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+
+        document.getElementById('saveNameInput').value = '';
+    }
+
+    function loadSave(idx) {
+        const saves = getSaves();
+        if (!saves[idx]) return;
+        if (!confirm('Load "' + saves[idx].name + '"? Current unsaved data will be replaced.')) return;
+        applySnapshot(saves[idx].data);
+        closeSaveModal();
+    }
+
+    function deleteSave(idx) {
+        const saves = getSaves();
+        if (!saves[idx]) return;
+        if (!confirm('Delete save "' + saves[idx].name + '"?')) return;
+        saves.splice(idx, 1);
+        putSaves(saves);
+        renderSaveList();
+    }
+
+    function renderSaveList() {
+        const saves = getSaves();
+        const el    = document.getElementById('saveList');
+        if (!saves.length) {
+            el.innerHTML = '<div class="save-empty">No saved sessions yet. Enter a name above and click Download JSON to save.</div>';
+            return;
+        }
+        el.innerHTML = saves.map((s, i) => {
+            const dt = s.date ? new Date(s.date).toLocaleString() : '';
+            return `<div class="save-row">
+                <div>
+                    <div class="save-name">${s.name}</div>
+                    <div class="save-meta">${dt} &nbsp;·&nbsp; ${s.data.seats ?? '?'} stations &nbsp;·&nbsp; ${s.data.lineType ?? ''}</div>
+                </div>
+                <button class="btn btn-secondary" style="padding:5px 12px;font-size:0.78rem;margin-right:4px;white-space:nowrap" onclick="loadSave(${i})">⬆ Load</button>
+                <button class="btn btn-danger"    style="padding:5px 10px;font-size:0.78rem;margin-right:0" onclick="deleteSave(${i})">✕</button>
+            </div>`;
+        }).join('');
+    }
+
+    function loadFromFile(evt) {
+        const file = evt.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const parsed = JSON.parse(e.target.result);
+                // Support both bare snapshot and {name, date, data} wrapper
+                const snap = parsed.data || parsed;
+                const nm   = parsed.name || file.name.replace('.json','');
+                if (!confirm('Load "' + nm + '"? Current unsaved data will be replaced.')) return;
+
+                // Also add to localStorage list
+                const saves = getSaves();
+                saves.unshift({ name: nm, date: parsed.date || new Date().toISOString(), data: snap });
+                putSaves(saves);
+
+                applySnapshot(snap);
+                closeSaveModal();
+            } catch(err) {
+                alert('Could not read file: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+        evt.target.value = '';
+    }
+
     // Keyboard shortcuts for modals
     document.getElementById('stationNameInput').addEventListener('keypress', e => { if (e.key === 'Enter') saveStationNameEdit(); });
     document.getElementById('stationInput').addEventListener('keypress', e => { if (e.key === 'Enter') saveStationEdit(); });
@@ -969,7 +1157,7 @@ if (!window.location.search.includes('token=securelink123')) {
     document.getElementById('weDuration').addEventListener('keypress', e => { if (e.key === 'Enter') addWorkElement(); });
 
     // Close modals on backdrop click
-    ['weModal','catModal','stationNameModal','stationModal'].forEach(id => {
+    ['weModal','catModal','stationNameModal','stationModal','saveModal'].forEach(id => {
         document.getElementById(id).addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); });
     });
 
