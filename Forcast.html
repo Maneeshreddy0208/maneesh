@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MFG Line Balance Forecaster - Advanced</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
         :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #3b82f6; --danger: #ef4444; --success: #22c55e; --text: #334155; --border: #e2e8f0; --warning: #f59e0b; }
         * { box-sizing: border-box; }
@@ -55,6 +57,11 @@
         .cat-pill.selected { border-color: var(--primary); }
         .cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .hint-text { font-size: 0.78rem; color: #64748b; margin-top: -8px; margin-bottom: 10px; }
+        /* drag-to-reorder rows */
+        #tableBody tr { cursor: grab; transition: background 0.15s; }
+        #tableBody tr:active { cursor: grabbing; }
+        #tableBody tr.drag-over { border-top: 3px solid var(--accent); }
+        #tableBody tr.dragging { opacity: 0.4; box-shadow: 0 8px 24px rgba(0,0,0,0.18); background: #e0f2fe; }
     </style>
 </head>
 <body>
@@ -73,7 +80,7 @@ if (!window.location.search.includes('token=securelink123')) {
         <div>
             <button class="btn btn-secondary" onclick="manageCats()">🏷️ Categories</button>
             <button class="btn btn-secondary" onclick="resetData()">🔄 Reset</button>
-            <button class="btn" onclick="exportCSV()">💾 Export</button>
+            <button class="btn" onclick="exportExcel()">📊 Export Excel</button>
         </div>
     </header>
 
@@ -208,7 +215,7 @@ if (!window.location.search.includes('token=securelink123')) {
 
     <!-- Station Slot Analysis -->
     <div class="card" style="margin-top:24px;overflow-x:auto">
-        <h3>📋 Station Slot Analysis - Click name or cycle time to edit</h3>
+        <h3>📋 Station Slot Analysis - Click name or cycle time to edit &nbsp;<span style="font-size:0.78rem;color:#64748b;font-weight:400">· Hold and drag rows to reorder</span></h3>
         <table>
             <thead>
                 <tr>
@@ -410,7 +417,12 @@ if (!window.location.search.includes('token=securelink123')) {
                 ? wes.map(w => `<span class="tag" style="background:${catColor(w.catId)}22;color:${catColor(w.catId)}">${w.name} ${w.duration}s</span>`).join('')
                 : '<span style="color:#94a3b8;font-size:0.75rem">none</span>';
 
-            tbody.innerHTML += `<tr>
+            tbody.innerHTML += `<tr draggable="true" data-index="${i}"
+                ondragstart="onDragStart(event,${i})"
+                ondragover="onDragOver(event)"
+                ondragleave="onDragLeave(event)"
+                ondrop="onDrop(event,${i})"
+                ondragend="onDragEnd(event)">
                 <td class="editable-cell" onclick="editStationName(${i})">${state.stationNames[i]}</td>
                 <td>${state.lineType}</td>
                 <td class="editable-cell" onclick="editStationCycleTime(${i}, ${ct})">${ct}</td>
@@ -763,20 +775,191 @@ if (!window.location.search.includes('token=securelink123')) {
         calculate();
     }
 
-    function exportCSV() {
-        const takt = calcTakt();
-        let csv = 'Station,Type,CycleTime(s),WorkElements,Load%,Status\n';
-        for (let i = 0; i < state.seats; i++) {
-            const ct   = parseFloat(state.stationCycleTimes[i]) || 0;
-            const load = ((ct / takt) * 100).toFixed(1);
-            const stat = ct > takt ? 'OVER TAKT' : 'OK';
-            const wes  = (state.workElements['s' + i] || []).map(w => w.name + '(' + w.duration + 's/' + catName(w.catId) + ')').join(';');
-            csv += `${state.stationNames[i]},${state.lineType},${ct},"${wes}",${load}%,${stat}\n`;
+    function exportCSV() { /* kept for legacy; use exportExcel */ }
+
+    // ── Drag-to-reorder stations ──────────────────────────────────────────────
+    let dragSrcIndex = -1;
+
+    function onDragStart(e, idx) {
+        dragSrcIndex = idx;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', idx);
+        setTimeout(() => e.target.classList.add('dragging'), 0);
+    }
+
+    function onDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('drag-over'));
+        e.currentTarget.classList.add('drag-over');
+    }
+
+    function onDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+
+    function onDrop(e, targetIdx) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        if (dragSrcIndex === -1 || dragSrcIndex === targetIdx) return;
+
+        // Reorder all station arrays
+        function moveItem(arr, from, to) {
+            const item = arr.splice(from, 1)[0];
+            arr.splice(to, 0, item);
         }
-        const a = document.createElement('a');
-        a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-        a.download = 'Line_Balance_Forecast.csv';
-        a.click();
+
+        moveItem(state.stationCycleTimes, dragSrcIndex, targetIdx);
+        moveItem(state.stationNames,      dragSrcIndex, targetIdx);
+
+        // Remap workElements keys (s0..sN) after reorder
+        const oldWE = {};
+        for (let i = 0; i < state.seats; i++) oldWE[i] = state.workElements['s' + i] || [];
+        const order = Array.from({length: state.seats}, (_, i) => i);
+        moveItem(order, dragSrcIndex, targetIdx);
+        for (let i = 0; i < state.seats; i++) {
+            state.workElements['s' + i] = oldWE[order[i]];
+        }
+
+        dragSrcIndex = -1;
+        state.buildTimeOverride = false;
+        calculate();
+    }
+
+    function onDragEnd(e) {
+        e.target.classList.remove('dragging');
+        document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('drag-over'));
+        dragSrcIndex = -1;
+    }
+
+    // ── Excel export (SheetJS + html2canvas) ─────────────────────────────────
+    async function exportExcel() {
+        const btn = document.querySelector('button[onclick="exportExcel()"]');
+        const origText = btn.innerText;
+        btn.innerText = '⏳ Generating...';
+        btn.disabled = true;
+
+        try {
+            const wb = XLSX.utils.book_new();
+            const takt = calcTakt();
+
+            // ── Sheet 1: Station Data ─────────────────────────────────────────
+            const stationRows = [['#','Station','Type','Cycle Time (s)','Work Elements','Load %','Status']];
+            for (let i = 0; i < state.seats; i++) {
+                const ct   = parseFloat(state.stationCycleTimes[i]) || 0;
+                const load = ((ct / takt) * 100).toFixed(1);
+                const stat = ct > takt ? 'OVER TAKT' : 'OK';
+                const wes  = (state.workElements['s' + i] || []).map(w => w.name + ' (' + w.duration + 's / ' + catName(w.catId) + ')').join('; ');
+                stationRows.push([i + 1, state.stationNames[i], state.lineType, ct, wes, load + '%', stat]);
+            }
+            const ws1 = XLSX.utils.aoa_to_sheet(stationRows);
+            ws1['!cols'] = [5,22,8,14,40,10,12].map(w => ({ wch: w }));
+            XLSX.utils.book_append_sheet(wb, ws1, 'Station Data');
+
+            // ── Sheet 2: Line Balance Data ────────────────────────────────────
+            const lbRows = [['Station Label','Cycle Time (s)','Takt Time (s)','Over Takt?']];
+            for (let i = 0; i < state.seats; i++) {
+                const ct = parseFloat(state.stationCycleTimes[i]) || 0;
+                lbRows.push(['S' + (i + 1), ct, parseFloat(takt.toFixed(2)), ct > takt ? 'YES' : 'NO']);
+            }
+            const ws2 = XLSX.utils.aoa_to_sheet(lbRows);
+            ws2['!cols'] = [14,16,16,12].map(w => ({ wch: w }));
+            XLSX.utils.book_append_sheet(wb, ws2, 'Line Balance Data');
+
+            // ── Sheet 3: Pareto Data ──────────────────────────────────────────
+            const devs = [];
+            for (let i = 0; i < state.seats; i++) {
+                const ct = parseFloat(state.stationCycleTimes[i]) || 0;
+                devs.push({ label: 'S' + (i + 1), dev: Math.max(0, ct - takt) });
+            }
+            devs.sort((a, b) => b.dev - a.dev);
+            let cum = 0;
+            const tot = devs.reduce((s, d) => s + d.dev, 0) || 1;
+            const paretoRows = [['Station','Over-Takt Deviation (s)','Cumulative %']];
+            devs.forEach(d => { cum += d.dev; paretoRows.push([d.label, parseFloat(d.dev.toFixed(2)), parseFloat(((cum / tot) * 100).toFixed(1))]); });
+            const ws3 = XLSX.utils.aoa_to_sheet(paretoRows);
+            ws3['!cols'] = [12,22,14].map(w => ({ wch: w }));
+            XLSX.utils.book_append_sheet(wb, ws3, 'Pareto Data');
+
+            // ── Sheet 4: Yamazumi Data ────────────────────────────────────────
+            const catIds   = state.categories.map(c => c.id);
+            const catNames = state.categories.map(c => c.name);
+            const yamHeader = ['Station', ...catNames, 'Uncategorised', 'Total (s)', 'Takt (s)'];
+            const yamRows  = [yamHeader];
+            for (let i = 0; i < state.seats; i++) {
+                const wes   = state.workElements['s' + i] || [];
+                const catTotals = catIds.map(cid => wes.filter(w => w.catId === cid).reduce((s, w) => s + w.duration, 0));
+                const uncat = wes.filter(w => !catIds.includes(w.catId)).reduce((s, w) => s + w.duration, 0)
+                            + (wes.length === 0 ? parseFloat(state.stationCycleTimes[i]) || 0 : 0);
+                const total = parseFloat(state.stationCycleTimes[i]) || 0;
+                yamRows.push([state.stationNames[i], ...catTotals.map(v => parseFloat(v.toFixed(2))), parseFloat(uncat.toFixed(2)), total, parseFloat(takt.toFixed(2))]);
+            }
+            const ws4 = XLSX.utils.aoa_to_sheet(yamRows);
+            ws4['!cols'] = [22, ...Array(yamHeader.length - 1).fill(14)].map(w => ({ wch: w }));
+            XLSX.utils.book_append_sheet(wb, ws4, 'Yamazumi Data');
+
+            // ── Sheets 5-7: Chart images via html2canvas ──────────────────────
+            const chartDefs = [
+                { canvasId: 'balanceChart',  sheetName: 'Line Balance Chart'  },
+                { canvasId: 'paretoChart',   sheetName: 'Pareto Chart'        },
+                { canvasId: 'yamazumiChart', sheetName: 'Yamazumi Chart'      }
+            ];
+
+            for (const def of chartDefs) {
+                try {
+                    const canvas  = document.getElementById(def.canvasId);
+                    const imgCanvas = await html2canvas(canvas, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+                    const imgData = imgCanvas.toDataURL('image/png').split(',')[1];
+                    const wsImg   = XLSX.utils.aoa_to_sheet([['Chart image below']]);
+                    wsImg['!cols'] = [{ wch: 80 }];
+                    // Embed image using SheetJS image utility (xlsx-js-style compatible fallback)
+                    if (!wb.Sheets[def.sheetName]) {
+                        XLSX.utils.book_append_sheet(wb, wsImg, def.sheetName);
+                    }
+                    // Add image via workbook Images array (supported by xlsx full build)
+                    if (!wb.Workbook) wb.Workbook = {};
+                    if (!wb.Workbook.Sheets) wb.Workbook.Sheets = wb.SheetNames.map(() => ({}));
+                    const imgEntry = {
+                        name: def.canvasId + '.png',
+                        data: imgData,
+                        opts: { base64: true },
+                        sheet: def.sheetName,
+                        anchor: { col: 0, row: 1 }
+                    };
+                    if (!wb._images) wb._images = [];
+                    wb._images.push(imgEntry);
+
+                    // Fallback: write png as a standalone cell note for xlsx compatibility
+                    // Instead write a plain image sheet using a simple approach
+                    const wsPng = XLSX.utils.aoa_to_sheet([
+                        ['Chart: ' + def.sheetName],
+                        ['(Image embedded below — view in Excel)']
+                    ]);
+                    // Attempt direct image embedding via SheetJS drawing mechanism
+                    if (typeof XLSX.utils.sheet_add_image === 'function') {
+                        XLSX.utils.sheet_add_image(wsPng, imgData, { tl: { col: 0, row: 2 }, ext: { width: 900, height: 400 } });
+                    }
+                    // Replace placeholder sheet with image-enriched sheet
+                    const sheetIdx = wb.SheetNames.indexOf(def.sheetName);
+                    if (sheetIdx >= 0) wb.Sheets[def.sheetName] = wsPng;
+                    else XLSX.utils.book_append_sheet(wb, wsPng, def.sheetName);
+                } catch (imgErr) {
+                    console.warn('Chart image capture failed for ' + def.canvasId, imgErr);
+                    const wsFallback = XLSX.utils.aoa_to_sheet([['Chart image could not be captured. Check browser permissions.']]);
+                    const sheetIdx = wb.SheetNames.indexOf(def.sheetName);
+                    if (sheetIdx >= 0) wb.Sheets[def.sheetName] = wsFallback;
+                    else XLSX.utils.book_append_sheet(wb, wsFallback, def.sheetName);
+                }
+            }
+
+            XLSX.writeFile(wb, 'Line_Balance_Forecast.xlsx');
+        } catch(err) {
+            alert('Export failed: ' + err.message);
+            console.error(err);
+        } finally {
+            btn.innerText = origText;
+            btn.disabled  = false;
+        }
     }
 
     // Keyboard shortcuts for modals
