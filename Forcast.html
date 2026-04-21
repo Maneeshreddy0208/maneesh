@@ -282,8 +282,25 @@ if (!window.location.search.includes('token=securelink123')) {
 
 <!-- Work Elements Modal -->
 <div id="weModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:560px">
         <h2 id="weModalTitle">Work Elements</h2>
+
+        <!-- Station categories manager (inline) -->
+        <details id="stationCatDetails" style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;padding:10px">
+            <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--primary);user-select:none">
+                🏷️ Station categories &nbsp;<span id="stationCatCount" style="font-weight:400;color:#64748b"></span>
+            </summary>
+            <div style="margin-top:10px">
+                <div id="stationCatList" style="margin-bottom:10px"></div>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+                    <input type="text" id="scNewName" placeholder="Category name" style="flex:1;min-width:100px;margin-bottom:0;font-size:0.82rem">
+                    <input type="color" id="scNewColor" value="#3b82f6" style="width:36px;height:34px;padding:2px;margin-bottom:0">
+                    <button class="btn btn-secondary" style="padding:6px 12px;font-size:0.78rem;margin-right:0" onclick="addStationCat()">Add</button>
+                </div>
+                <button class="btn" style="width:100%;padding:6px;font-size:0.78rem;background:#f1f5f9;color:var(--primary)" onclick="copyFromTemplate()">📋 Copy from global template</button>
+            </div>
+        </details>
+
         <div class="input-group">
             <label>Element Name</label>
             <input type="text" id="weName" placeholder="e.g. Torque bolt A">
@@ -360,7 +377,8 @@ if (!window.location.search.includes('token=securelink123')) {
         stationCycleTimes: [],
         stationNames: [],
         workElements: {},
-        categories: [
+        stationCategories: {},   // keyed by 's0','s1',... — each is an array of {id,name,color}
+        categories: [            // global template only
             { id: 'c1', name: 'Manual',  color: '#3b82f6' },
             { id: 'c2', name: 'Walk',    color: '#22c55e' },
             { id: 'c3', name: 'Wait',    color: '#f59e0b' },
@@ -373,6 +391,18 @@ if (!window.location.search.includes('token=securelink123')) {
     let editingStationIndex = -1, editingNameIndex = -1;
     let selectedCatId = null;
 
+    // ── Per-station category helpers ──────────────────────────────────────────
+    function stationCats(idx) {
+        const key = 's' + idx;
+        if (!state.stationCategories[key]) state.stationCategories[key] = [];
+        return state.stationCategories[key];
+    }
+
+    function stationCatById(idx, id) { return stationCats(idx).find(c => c.id === id); }
+    function stationCatColor(idx, id) { const c = stationCatById(idx, id); return c ? c.color : '#94a3b8'; }
+    function stationCatName(idx, id)  { const c = stationCatById(idx, id); return c ? c.name  : 'Uncategorised'; }
+
+    // Legacy global helpers (used by global cat manager only)
     function catById(id) { return state.categories.find(c => c.id === id); }
     function catColor(id) { const c = catById(id); return c ? c.color : '#94a3b8'; }
     function catName(id)  { const c = catById(id); return c ? c.name  : 'Uncategorised'; }
@@ -409,6 +439,7 @@ if (!window.location.search.includes('token=securelink123')) {
             state.stationCycleTimes.push((takt * (0.85 + Math.random() * 0.20)).toFixed(1));
             state.stationNames.push('Station ' + (i + 1));
             if (!state.workElements['s' + i]) state.workElements['s' + i] = [];
+            if (!state.stationCategories['s' + i]) state.stationCategories['s' + i] = [];
         }
 
         // Sync cycle times from work elements
@@ -454,7 +485,7 @@ if (!window.location.search.includes('token=securelink123')) {
 
             const wes = state.workElements['s' + i] || [];
             const weHtml = wes.length
-                ? wes.map(w => `<span class="tag" style="background:${catColor(w.catId)}22;color:${catColor(w.catId)}">${w.name} ${w.duration}s</span>`).join('')
+                ? wes.map(w => `<span class="tag" style="background:${stationCatColor(i, w.catId)}22;color:${stationCatColor(i, w.catId)}">${w.name} ${w.duration}s</span>`).join('')
                 : '<span style="color:#94a3b8;font-size:0.75rem">none</span>';
 
             tbody.innerHTML += `<tr draggable="true" data-index="${i}"
@@ -536,26 +567,40 @@ if (!window.location.search.includes('token=securelink123')) {
         const ctx = document.getElementById('yamazumiChart');
         if (yamazumiChart) yamazumiChart.destroy();
 
-        // Build category stacks
-        const catMap = {};
-        state.categories.forEach(c => { catMap[c.id] = { name: c.name, color: c.color, data: Array(state.seats).fill(0) }; });
-        catMap['__none'] = { name: 'Uncategorised', color: '#94a3b8', data: Array(state.seats).fill(0) };
+        // Each station contributes segments independently.
+        // We build one dataset per (stationIndex × categoryId) pair so colors are fully independent.
+        // Chart.js stacked bar: each dataset fills only one bar position (others = 0).
+        const datasets = [];
 
         for (let i = 0; i < state.seats; i++) {
-            const wes = state.workElements['s' + i] || [];
+            const wes  = state.workElements['s' + i] || [];
+            const cats = stationCats(i);
+
             if (wes.length === 0) {
-                catMap['__none'].data[i] = parseFloat(state.stationCycleTimes[i]) || 0;
+                // No work elements — show as single grey block
+                const data = Array(state.seats).fill(0);
+                data[i] = parseFloat(state.stationCycleTimes[i]) || 0;
+                datasets.push({ label: state.stationNames[i] + ' (unset)', data, backgroundColor: '#94a3b8', borderRadius: 2, stack: 'stack' });
             } else {
+                // Group WEs by catId
+                const grouped = {};
                 wes.forEach(w => {
-                    const k = w.catId && catMap[w.catId] ? w.catId : '__none';
-                    catMap[k].data[i] += w.duration;
+                    const k = w.catId || '__none';
+                    if (!grouped[k]) grouped[k] = 0;
+                    grouped[k] += w.duration;
+                });
+
+                Object.entries(grouped).forEach(([catId, total]) => {
+                    const cat   = cats.find(c => c.id === catId);
+                    const color = cat ? cat.color : '#94a3b8';
+                    const nm    = cat ? cat.name  : 'Uncategorised';
+                    const data  = Array(state.seats).fill(0);
+                    data[i]     = parseFloat(total.toFixed(2));
+                    // Use unique label per station+cat so legend doesn't collapse them
+                    datasets.push({ label: state.stationNames[i] + ' · ' + nm, data, backgroundColor: color, borderRadius: 2, stack: 'stack' });
                 });
             }
         }
-
-        const datasets = Object.values(catMap)
-            .filter(v => v.data.some(d => d > 0))
-            .map(v => ({ label: v.name, data: v.data.slice(0, state.seats), backgroundColor: v.color, borderRadius: 2 }));
 
         datasets.push({
             type: 'line',
@@ -566,7 +611,8 @@ if (!window.location.search.includes('token=securelink123')) {
             borderDash: [5, 5],
             fill: false,
             pointRadius: 0,
-            order: 0
+            order: 0,
+            stack: undefined
         });
 
         yamazumiChart = new Chart(ctx.getContext('2d'), {
@@ -583,7 +629,26 @@ if (!window.location.search.includes('token=securelink123')) {
                     y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Seconds' } },
                     x: { stacked: true }
                 },
-                plugins: { legend: { display: true, position: 'top' }, tooltip: { mode: 'index', intersect: false } }
+                plugins: {
+                    legend: { display: true, position: 'top',
+                        labels: { font: { size: 10 }, boxWidth: 12, padding: 8,
+                            // Deduplicate legend: show each dataset label once
+                            filter: (item, chart) => {
+                                const idx = chart.datasets.findIndex(d => d.label === item.text);
+                                return idx === item.datasetIndex;
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index', intersect: false,
+                        callbacks: {
+                            label: (ctx) => {
+                                if (ctx.parsed.y === 0) return null;
+                                return ctx.dataset.label + ': ' + ctx.parsed.y + 's';
+                            }
+                        }
+                    }
+                }
             }
         });
     }
@@ -625,10 +690,12 @@ if (!window.location.search.includes('token=securelink123')) {
     // ── Work elements modal ──────────────────────────────────────────────────
     function openWeModal(idx) {
         editingStationIndex = idx;
-        selectedCatId = state.categories.length ? state.categories[0].id : '__none';
+        const cats = stationCats(idx);
+        selectedCatId = cats.length ? cats[0].id : '__none';
         document.getElementById('weModalTitle').innerText = 'Work Elements — ' + state.stationNames[idx];
-        document.getElementById('weName').value    = '';
+        document.getElementById('weName').value     = '';
         document.getElementById('weDuration').value = '';
+        renderStationCatList();
         renderCatPicker('catPickerAdd');
         renderWeList();
         document.getElementById('weModal').classList.add('active');
@@ -642,10 +709,80 @@ if (!window.location.search.includes('token=securelink123')) {
         calculate();
     }
 
+    // ── Per-station category manager (inside WE modal) ────────────────────────
+    function renderStationCatList() {
+        const cats = stationCats(editingStationIndex);
+        document.getElementById('stationCatCount').textContent = cats.length ? '(' + cats.length + ' categories)' : '(none yet)';
+        const el = document.getElementById('stationCatList');
+        if (!cats.length) {
+            el.innerHTML = '<div style="color:#94a3b8;font-size:0.8rem;margin-bottom:6px">No categories yet — add below or copy from global template.</div>';
+            return;
+        }
+        el.innerHTML = cats.map((c, i) => `
+            <div class="cat-row" style="align-items:center;margin-bottom:6px">
+                <input type="color" value="${c.color}"
+                    style="width:28px;height:28px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;flex-shrink:0;margin-bottom:0"
+                    oninput="renameStationCat(${i}, null, this.value)">
+                <input type="text" value="${c.name}"
+                    style="flex:1;margin-bottom:0;font-size:0.82rem;padding:5px 8px"
+                    placeholder="Category name"
+                    oninput="renameStationCat(${i}, this.value, null)">
+                <button class="btn btn-danger" style="padding:3px 8px;font-size:0.75rem;margin-right:0;flex-shrink:0" onclick="removeStationCat(${i})">×</button>
+            </div>`).join('');
+    }
+
+    function renameStationCat(i, newName, newColor) {
+        const cats = stationCats(editingStationIndex);
+        if (newName  !== null) cats[i].name  = newName;
+        if (newColor !== null) cats[i].color = newColor;
+        // Refresh picker if this cat is currently selected
+        renderCatPicker('catPickerAdd');
+        renderWeList();
+    }
+
+    function addStationCat() {
+        const nm  = document.getElementById('scNewName').value.trim();
+        const clr = document.getElementById('scNewColor').value;
+        if (!nm) return;
+        stationCats(editingStationIndex).push({ id: 'sc' + Date.now(), name: nm, color: clr });
+        document.getElementById('scNewName').value = '';
+        renderStationCatList();
+        renderCatPicker('catPickerAdd');
+    }
+
+    function removeStationCat(i) {
+        const cats = stationCats(editingStationIndex);
+        const id   = cats[i].id;
+        cats.splice(i, 1);
+        // Remap work elements using this cat to __none
+        (state.workElements['s' + editingStationIndex] || []).forEach(w => { if (w.catId === id) w.catId = '__none'; });
+        if (selectedCatId === id) selectedCatId = cats.length ? cats[0].id : '__none';
+        renderStationCatList();
+        renderCatPicker('catPickerAdd');
+        renderWeList();
+    }
+
+    function copyFromTemplate() {
+        const existing = stationCats(editingStationIndex);
+        state.categories.forEach(tc => {
+            if (!existing.find(c => c.name === tc.name)) {
+                existing.push({ id: 'sc' + Date.now() + Math.random().toString(36).slice(2), name: tc.name, color: tc.color });
+            }
+        });
+        if (existing.length) selectedCatId = existing[0].id;
+        renderStationCatList();
+        renderCatPicker('catPickerAdd');
+    }
+
     function renderCatPicker(containerId) {
-        const el = document.getElementById(containerId);
+        const el   = document.getElementById(containerId);
         if (!el) return;
-        el.innerHTML = state.categories.map(c =>
+        const cats = editingStationIndex >= 0 ? stationCats(editingStationIndex) : [];
+        if (!cats.length) {
+            el.innerHTML = '<span style="color:#94a3b8;font-size:0.8rem">No categories — add in the section above.</span>';
+            return;
+        }
+        el.innerHTML = cats.map(c =>
             `<span class="cat-pill${selectedCatId === c.id ? ' selected' : ''}"
                 style="background:${c.color}"
                 onclick="selectCat('${c.id}','${containerId}')">${c.name}</span>`
@@ -658,15 +795,16 @@ if (!window.location.search.includes('token=securelink123')) {
     }
 
     function renderWeList() {
-        const wes = state.workElements['s' + editingStationIndex] || [];
-        const el  = document.getElementById('weList');
+        const idx  = editingStationIndex;
+        const wes  = state.workElements['s' + idx] || [];
+        const el   = document.getElementById('weList');
         if (!wes.length) { el.innerHTML = '<div style="color:#94a3b8;font-size:0.82rem">No elements yet.</div>'; return; }
         el.innerHTML = wes.map((w, i) => `
             <div class="we-row">
-                <span class="color-dot" style="background:${catColor(w.catId)}"></span>
+                <span class="color-dot" style="background:${stationCatColor(idx, w.catId)}"></span>
                 <span style="flex:1">${w.name}</span>
                 <span style="color:#64748b">${w.duration}s</span>
-                <span class="tag" style="background:${catColor(w.catId)}22;color:${catColor(w.catId)}">${catName(w.catId)}</span>
+                <span class="tag" style="background:${stationCatColor(idx, w.catId)}22;color:${stationCatColor(idx, w.catId)}">${stationCatName(idx, w.catId)}</span>
                 <button class="btn btn-danger" style="padding:2px 8px;font-size:0.75rem" onclick="removeWe(${i})">×</button>
             </div>`).join('');
     }
@@ -677,9 +815,8 @@ if (!window.location.search.includes('token=securelink123')) {
         if (!nm || isNaN(dur) || dur <= 0) return;
         if (!state.workElements['s' + editingStationIndex]) state.workElements['s' + editingStationIndex] = [];
         state.workElements['s' + editingStationIndex].push({ name: nm, duration: dur, catId: selectedCatId || '__none' });
-        document.getElementById('weName').value    = '';
+        document.getElementById('weName').value     = '';
         document.getElementById('weDuration').value = '';
-        // Update cycle time for this station
         const sum = state.workElements['s' + editingStationIndex].reduce((a, b) => a + b.duration, 0);
         state.stationCycleTimes[editingStationIndex] = sum.toFixed(1);
         state.buildTimeOverride = false;
@@ -802,16 +939,17 @@ if (!window.location.search.includes('token=securelink123')) {
     }
 
     function resetData() {
-        state.stationCycleTimes = [];
-        state.stationNames = [];
-        state.workElements = {};
-        state.buildTimeOverride = false;
-        document.getElementById('target').value   = 4000;
-        document.getElementById('days').value     = 5;
-        document.getElementById('hours').value    = 8;
-        document.getElementById('seats').value    = 10;
+        state.stationCycleTimes  = [];
+        state.stationNames       = [];
+        state.workElements       = {};
+        state.stationCategories  = {};
+        state.buildTimeOverride  = false;
+        document.getElementById('target').value      = 4000;
+        document.getElementById('days').value        = 5;
+        document.getElementById('hours').value       = 8;
+        document.getElementById('seats').value       = 10;
         document.getElementById('current-ops').value = 8;
-        document.getElementById('lineType').value = 'R1s';
+        document.getElementById('lineType').value    = 'R1s';
         calculate();
     }
 
@@ -853,12 +991,17 @@ if (!window.location.search.includes('token=securelink123')) {
         moveItem(state.stationNames,      dragSrcIndex, targetIdx);
 
         // Remap workElements keys (s0..sN) after reorder
-        const oldWE = {};
-        for (let i = 0; i < state.seats; i++) oldWE[i] = state.workElements['s' + i] || [];
+        const oldWE  = {};
+        const oldSC  = {};
+        for (let i = 0; i < state.seats; i++) {
+            oldWE[i] = state.workElements['s' + i]     || [];
+            oldSC[i] = state.stationCategories['s' + i] || [];
+        }
         const order = Array.from({length: state.seats}, (_, i) => i);
         moveItem(order, dragSrcIndex, targetIdx);
         for (let i = 0; i < state.seats; i++) {
-            state.workElements['s' + i] = oldWE[order[i]];
+            state.workElements['s' + i]      = oldWE[order[i]];
+            state.stationCategories['s' + i] = oldSC[order[i]];
         }
 
         dragSrcIndex = -1;
@@ -1026,18 +1169,19 @@ if (!window.location.search.includes('token=securelink123')) {
 
     function captureState() {
         return {
-            target:            state.target,
-            days:              state.days,
-            hours:             state.hours,
-            seats:             state.seats,
-            lineType:          state.lineType,
-            stationCycleTimes: [...state.stationCycleTimes],
-            stationNames:      [...state.stationNames],
-            workElements:      JSON.parse(JSON.stringify(state.workElements)),
-            categories:        JSON.parse(JSON.stringify(state.categories)),
-            buildTimeOverride: state.buildTimeOverride,
-            totalBuildTime:    parseFloat(document.getElementById('totalBuildTime').value) || 0,
-            currentOps:        parseFloat(document.getElementById('current-ops').value) || 8
+            target:             state.target,
+            days:               state.days,
+            hours:              state.hours,
+            seats:              state.seats,
+            lineType:           state.lineType,
+            stationCycleTimes:  [...state.stationCycleTimes],
+            stationNames:       [...state.stationNames],
+            workElements:       JSON.parse(JSON.stringify(state.workElements)),
+            categories:         JSON.parse(JSON.stringify(state.categories)),
+            stationCategories:  JSON.parse(JSON.stringify(state.stationCategories)),
+            buildTimeOverride:  state.buildTimeOverride,
+            totalBuildTime:     parseFloat(document.getElementById('totalBuildTime').value) || 0,
+            currentOps:         parseFloat(document.getElementById('current-ops').value) || 8
         };
     }
 
@@ -1049,16 +1193,17 @@ if (!window.location.search.includes('token=securelink123')) {
         state.lineType          = snap.lineType          ?? state.lineType;
         state.stationCycleTimes = snap.stationCycleTimes ? [...snap.stationCycleTimes] : [];
         state.stationNames      = snap.stationNames      ? [...snap.stationNames]      : [];
-        state.workElements      = snap.workElements      ? JSON.parse(JSON.stringify(snap.workElements)) : {};
-        state.categories        = snap.categories        ? JSON.parse(JSON.stringify(snap.categories))   : state.categories;
+        state.workElements      = snap.workElements      ? JSON.parse(JSON.stringify(snap.workElements))      : {};
+        state.categories        = snap.categories        ? JSON.parse(JSON.stringify(snap.categories))        : state.categories;
+        state.stationCategories = snap.stationCategories ? JSON.parse(JSON.stringify(snap.stationCategories)) : {};
         state.buildTimeOverride = snap.buildTimeOverride ?? false;
 
-        document.getElementById('target').value       = state.target;
-        document.getElementById('days').value         = state.days;
-        document.getElementById('hours').value        = state.hours;
-        document.getElementById('seats').value        = state.seats;
-        document.getElementById('lineType').value     = state.lineType;
-        document.getElementById('current-ops').value  = snap.currentOps ?? 8;
+        document.getElementById('target').value      = state.target;
+        document.getElementById('days').value        = state.days;
+        document.getElementById('hours').value       = state.hours;
+        document.getElementById('seats').value       = state.seats;
+        document.getElementById('lineType').value    = state.lineType;
+        document.getElementById('current-ops').value = snap.currentOps ?? 8;
         if (snap.totalBuildTime) {
             document.getElementById('totalBuildTime').value = snap.totalBuildTime;
         }
