@@ -166,6 +166,30 @@ if (!window.location.search.includes('token=securelink123')) {
         </div>
     </div>
 
+    <!-- Hours status row -->
+    <div class="grid-2" style="margin-bottom:16px">
+        <div class="card" style="padding:14px 18px">
+            <div style="font-size:0.78rem;font-weight:600;color:#64748b;margin-bottom:6px">CURRENT NET HOURS / DAY</div>
+            <div style="display:flex;align-items:center;gap:14px">
+                <span id="val-hours-current" style="font-size:1.8rem;font-weight:800;color:var(--primary)">8.0h</span>
+                <span id="val-hours-status" style="font-size:0.85rem;font-weight:600;padding:4px 10px;border-radius:6px;background:#dcfce7;color:#166534">On target</span>
+            </div>
+        </div>
+        <div class="card" style="padding:14px 18px">
+            <div style="font-size:0.78rem;font-weight:600;color:#64748b;margin-bottom:6px">MIN HOURS NEEDED (BOTTLENECK BASIS)</div>
+            <div style="display:flex;align-items:center;gap:14px">
+                <span id="val-hours-min" style="font-size:1.8rem;font-weight:800;color:var(--primary)">—</span>
+                <span id="val-hours-delta" style="font-size:0.82rem;color:#64748b"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- WE Move Impact Panel (hidden until a move happens) -->
+    <div id="impactPanel" style="display:none;background:#1e293b;border-radius:12px;padding:16px 20px;margin-bottom:16px;color:#fff">
+        <div style="font-size:0.78rem;font-weight:700;letter-spacing:.08em;opacity:.6;margin-bottom:10px">LAST MOVE IMPACT</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px" id="impactGrid"></div>
+    </div>
+
     <!-- Advanced Metrics -->
     <div class="grid-3">
         <div class="card">
@@ -218,14 +242,6 @@ if (!window.location.search.includes('token=securelink123')) {
         </div>
     </div>
 
-    <!-- Pareto Analysis -->
-    <div class="card">
-        <h3>📉 Pareto Analysis - Bottleneck Identification</h3>
-        <div class="chart-container">
-            <canvas id="paretoChart"></canvas>
-        </div>
-    </div>
-
     <!-- Yamazumi Chart -->
     <div class="card">
         <h3>🗼 Yamazumi Chart - Work Element Stack by Station</h3>
@@ -267,6 +283,24 @@ if (!window.location.search.includes('token=securelink123')) {
         <h3>🤖 AI Insights &amp; Recommendations</h3>
         <div id="aiInsights">
             <p style="text-align:center;opacity:0.8">Run calculations to see AI recommendations...</p>
+        </div>
+    </div>
+</div>
+
+<!-- WE Colour Picker Modal (shown after a WE is dropped onto a new station) -->
+<div id="weColorModal" class="modal">
+    <div class="modal-content" style="max-width:360px">
+        <h2>🎨 Element colour</h2>
+        <p style="font-size:0.85rem;color:#64748b;margin-top:-8px" id="weColorModalDesc"></p>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <input type="color" id="weColorPicker" style="width:60px;height:50px;padding:4px;border-radius:8px;cursor:pointer;margin-bottom:0">
+            <div>
+                <div style="font-size:0.78rem;color:#64748b">Pick a colour for this element in its new station, or keep the current one.</div>
+            </div>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn" onclick="confirmWeColor(false)">Keep current</button>
+            <button class="btn btn-secondary" onclick="confirmWeColor(true)">Apply colour</button>
         </div>
     </div>
 </div>
@@ -403,7 +437,7 @@ if (!window.location.search.includes('token=securelink123')) {
         buildTimeOverride: false
     };
 
-    let myChart = null, paretoChart = null, yamazumiChart = null;
+    let myChart = null, yamazumiChart = null;
     let editingStationIndex = -1, editingNameIndex = -1;
     let selectedCatId = null;
 
@@ -465,6 +499,7 @@ if (!window.location.search.includes('token=securelink123')) {
         document.getElementById('val-takt').innerText  = takt.toFixed(1) + 's';
         document.getElementById('val-ops').innerText   = reqOps;
 
+        updateHoursPanel(takt);
         updateTableAndCharts(takt);
         calculateEfficiency();
         generateAIInsights(takt, uph, reqOps, daily);
@@ -526,7 +561,6 @@ if (!window.location.search.includes('token=securelink123')) {
         document.getElementById('balance-rate').value = br + '%';
 
         updateLineBalanceChart(labels, totalTimes, barColors, takt);
-        updateParetoChart(labels, totalTimes, takt);
         updateYamazumiChart(labels, takt);
         updateWeBreakdownChart();
     }
@@ -534,6 +568,36 @@ if (!window.location.search.includes('token=securelink123')) {
     function calcVariance(values) {
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
         return Math.sqrt(values.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / values.length);
+    }
+
+    function updateHoursPanel(takt) {
+        const hours    = parseFloat(document.getElementById('hours').value) || 8;
+        const daily    = Math.ceil(state.target / (parseFloat(document.getElementById('days').value) || 5));
+
+        // Bottleneck-based minimum hours: bottleneck CT drives the line pace
+        const bottleneckCT = Math.max(...state.stationCycleTimes.slice(0, state.seats).map(t => parseFloat(t) || 0));
+        // Min hours = daily units × bottleneck CT ÷ 3600
+        const minHours = (daily * bottleneckCT) / 3600;
+
+        const statusEl = document.getElementById('val-hours-status');
+        const delta    = hours - minHours;
+
+        document.getElementById('val-hours-current').textContent = hours.toFixed(1) + 'h';
+        document.getElementById('val-hours-min').textContent     = minHours.toFixed(2) + 'h';
+
+        if (delta >= 0) {
+            statusEl.textContent      = '✓ On target';
+            statusEl.style.background = '#dcfce7';
+            statusEl.style.color      = '#166534';
+            document.getElementById('val-hours-delta').textContent = '+' + delta.toFixed(2) + 'h buffer available';
+            document.getElementById('val-hours-delta').style.color = '#22c55e';
+        } else {
+            statusEl.textContent      = '⚠ Shortfall';
+            statusEl.style.background = '#fee2e2';
+            statusEl.style.color      = '#991b1b';
+            document.getElementById('val-hours-delta').textContent = delta.toFixed(2) + 'h short — need more hours or rebalance';
+            document.getElementById('val-hours-delta').style.color = '#ef4444';
+        }
     }
 
     function updateLineBalanceChart(labels, times, colors, takt) {
@@ -552,27 +616,7 @@ if (!window.location.search.includes('token=securelink123')) {
         });
     }
 
-    function updateParetoChart(labels, times, takt) {
-        const ctx = document.getElementById('paretoChart');
-        if (paretoChart) paretoChart.destroy();
-        const devs   = times.map(t => Math.max(0, t - takt));
-        const sorted = devs.map((v, i) => ({ v, l: labels[i] })).sort((a, b) => b.v - a.v);
-        const sl = sorted.map(s => s.l), sv = sorted.map(s => s.v);
-        let cum = 0;
-        const tot = sv.reduce((a, b) => a + b, 0) || 1;
-        const cp  = sv.map(v => { cum += v; return ((cum / tot) * 100).toFixed(1); });
-        paretoChart = new Chart(ctx.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: sl,
-                datasets: [
-                    { type: 'bar',  label: 'Over-Takt Deviation (s)', data: sv, backgroundColor: '#ef4444', yAxisID: 'y', borderRadius: 4 },
-                    { type: 'line', label: 'Cumulative %', data: cp, borderColor: '#3b82f6', borderWidth: 2, yAxisID: 'y1', fill: false, pointRadius: 4 }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { type: 'linear', position: 'left', beginAtZero: true }, y1: { type: 'linear', position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } } }, plugins: { legend: { display: true, position: 'top' } } }
-        });
-    }
+
 
     function updateYamazumiChart(labels, takt) {
         const ctx = document.getElementById('yamazumiChart');
@@ -816,45 +860,22 @@ if (!window.location.search.includes('token=securelink123')) {
 
     function onWEDropZoneDrop(e) {
         e.preventDefault();
-        // Picker buttons handle the actual move; this prevents default browser behaviour
     }
 
     function doMoveWEToStation(e, destIdx) {
         if (e) e.preventDefault();
         if (weDragSrcWeIdx === -1) return;
-        moveWorkElement(editingStationIndex, weDragSrcWeIdx, destIdx);
-    }
-
-    function moveWorkElement(srcStationIdx, weIdx, destStationIdx) {
-        const srcWes  = state.workElements['s' + srcStationIdx] || [];
-        const destWes = state.workElements['s' + destStationIdx] || [];
-        if (weIdx < 0 || weIdx >= srcWes.length) return;
-
-        const item = srcWes.splice(weIdx, 1)[0];
-        // Keep catId as-is (category stays with element)
-        destWes.push(item);
-        state.workElements['s' + destStationIdx] = destWes;
-
-        // Recalculate cycle times for both stations
-        state.stationCycleTimes[srcStationIdx]  = srcWes.length
-            ? srcWes.reduce((a, b) => a + b.duration, 0).toFixed(1)
-            : '0.0';
-        state.stationCycleTimes[destStationIdx] = destWes.reduce((a, b) => a + b.duration, 0).toFixed(1);
-        state.buildTimeOverride = false;
-        document.getElementById('totalBuildTime').value = sumCycleTimes().toFixed(1);
-
+        const srcIdx = editingStationIndex;
+        const weIdx  = weDragSrcWeIdx;
         weDragSrcWeIdx = -1;
-        // Reset drop zone
         document.getElementById('weDropZone').classList.remove('drop-active');
         document.getElementById('weDropStationPicker').style.display = 'none';
-        renderWeList();
-        // Show quick confirmation
-        const banner = document.createElement('div');
-        banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:8px 20px;border-radius:8px;font-size:0.85rem;font-weight:600;z-index:2000;box-shadow:0 4px 12px rgba(0,0,0,0.15)';
-        banner.textContent = '✓ Moved to ' + state.stationNames[destStationIdx];
-        document.body.appendChild(banner);
-        setTimeout(() => banner.remove(), 1800);
+        // Close the WE modal first so impact panel is visible
+        document.getElementById('weModal').classList.remove('active');
+        editingStationIndex = -1;
+        moveWorkElement(srcIdx, weIdx, destIdx);
     }
+
 
     // ── Work Elements Breakdown Chart ─────────────────────────────────────────
     let weBreakdownChart = null;
@@ -1218,17 +1239,141 @@ if (!window.location.search.includes('token=securelink123')) {
         document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('we-drop-target', 'drag-over'));
 
         if (tableWESrcStation !== -1 && tableWESrcWeIdx !== -1 && destStationIdx !== tableWESrcStation) {
-            // Move WE between stations
             moveWorkElement(tableWESrcStation, tableWESrcWeIdx, destStationIdx);
             tableWESrcStation = -1;
             tableWESrcWeIdx   = -1;
         } else if (tableWESrcStation === -1) {
-            // Normal row reorder
             onDrop(e, destStationIdx);
         } else {
             tableWESrcStation = -1;
             tableWESrcWeIdx   = -1;
         }
+    }
+
+    // ── Work element move: capture impact, show colour picker, then apply ────
+    let _pendingMove = null; // holds move context while colour picker is open
+
+    function moveWorkElement(srcStationIdx, weIdx, destStationIdx) {
+        const srcWes  = state.workElements['s' + srcStationIdx] || [];
+        const destWes = state.workElements['s' + destStationIdx] || [];
+        if (weIdx < 0 || weIdx >= srcWes.length) return;
+
+        const takt = calcTakt();
+
+        // Snapshot BEFORE state for impact calculation
+        const before = {
+            srcCT:   parseFloat(state.stationCycleTimes[srcStationIdx])  || 0,
+            destCT:  parseFloat(state.stationCycleTimes[destStationIdx]) || 0,
+            srcLoad: ((parseFloat(state.stationCycleTimes[srcStationIdx])  || 0) / takt * 100),
+            destLoad:((parseFloat(state.stationCycleTimes[destStationIdx]) || 0) / takt * 100),
+            bottleneck: Math.max(...state.stationCycleTimes.slice(0, state.seats).map(t => parseFloat(t) || 0)),
+            uph: parseFloat(document.getElementById('val-uph').innerText) || 0,
+            takt: takt
+        };
+
+        const item = srcWes[weIdx];
+
+        // Store pending move — actual data mutation happens after colour choice
+        _pendingMove = { srcStationIdx, weIdx, destStationIdx, item: JSON.parse(JSON.stringify(item)), before };
+
+        // Show colour picker modal
+        document.getElementById('weColorModalDesc').textContent =
+            '"' + item.name + '" → ' + state.stationNames[destStationIdx];
+        document.getElementById('weColorPicker').value = catColor(item.catId);
+        document.getElementById('weColorModal').classList.add('active');
+    }
+
+    function confirmWeColor(applyNew) {
+        document.getElementById('weColorModal').classList.remove('active');
+        if (!_pendingMove) return;
+
+        const { srcStationIdx, weIdx, destStationIdx, item, before } = _pendingMove;
+        _pendingMove = null;
+
+        const srcWes  = state.workElements['s' + srcStationIdx];
+        const destWes = state.workElements['s' + destStationIdx] || [];
+
+        // If user picked a new colour, create a dynamic category for it
+        if (applyNew) {
+            const newColor = document.getElementById('weColorPicker').value;
+            // Find or create a category with this colour
+            let dynCat = state.categories.find(c => c.color === newColor);
+            if (!dynCat) {
+                dynCat = { id: 'dyn' + Date.now(), name: 'Custom', color: newColor };
+                state.categories.push(dynCat);
+            }
+            item.catId = dynCat.id;
+        }
+
+        // Perform the move
+        srcWes.splice(weIdx, 1);
+        destWes.push(item);
+        state.workElements['s' + destStationIdx] = destWes;
+
+        // Recalculate cycle times
+        state.stationCycleTimes[srcStationIdx]  = srcWes.length
+            ? srcWes.reduce((a, b)  => a + b.duration, 0).toFixed(1) : '0.0';
+        state.stationCycleTimes[destStationIdx] = destWes.reduce((a, b) => a + b.duration, 0).toFixed(1);
+        state.buildTimeOverride = false;
+
+        // Recalculate all metrics
+        calculate();
+
+        // AFTER recalc — compute impact
+        const taktNew = calcTakt();
+        const after = {
+            srcCT:    parseFloat(state.stationCycleTimes[srcStationIdx])  || 0,
+            destCT:   parseFloat(state.stationCycleTimes[destStationIdx]) || 0,
+            srcLoad:  ((parseFloat(state.stationCycleTimes[srcStationIdx])  || 0) / taktNew * 100),
+            destLoad: ((parseFloat(state.stationCycleTimes[destStationIdx]) || 0) / taktNew * 100),
+            bottleneck: Math.max(...state.stationCycleTimes.slice(0, state.seats).map(t => parseFloat(t) || 0)),
+            uph: parseFloat(document.getElementById('val-uph').innerText) || 0,
+            takt: taktNew
+        };
+
+        showImpactPanel(srcStationIdx, destStationIdx, item, before, after);
+    }
+
+    function showImpactPanel(srcIdx, destIdx, item, before, after) {
+        const panel = document.getElementById('impactPanel');
+        const grid  = document.getElementById('impactGrid');
+        panel.style.display = 'block';
+
+        function delta(b, a, unit, decimals) {
+            const d = a - b;
+            const sign = d > 0 ? '+' : '';
+            const color = d === 0 ? '#94a3b8' : (d > 0 ? '#f87171' : '#4ade80');
+            return `<span style="color:${color};font-weight:700">${sign}${d.toFixed(decimals)}${unit}</span>`;
+        }
+        function statusBadge(ct, takt) {
+            return ct > takt
+                ? '<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">OVER TAKT</span>'
+                : '<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">OK</span>';
+        }
+
+        const cards = [
+            { label: state.stationNames[srcIdx] + ' CT', before: before.srcCT.toFixed(1)+'s', after: after.srcCT.toFixed(1)+'s', d: delta(before.srcCT, after.srcCT, 's', 1), badge: statusBadge(after.srcCT, after.takt) },
+            { label: state.stationNames[srcIdx] + ' Load', before: before.srcLoad.toFixed(1)+'%', after: after.srcLoad.toFixed(1)+'%', d: delta(before.srcLoad, after.srcLoad, '%', 1) },
+            { label: state.stationNames[destIdx] + ' CT', before: before.destCT.toFixed(1)+'s', after: after.destCT.toFixed(1)+'s', d: delta(before.destCT, after.destCT, 's', 1), badge: statusBadge(after.destCT, after.takt) },
+            { label: state.stationNames[destIdx] + ' Load', before: before.destLoad.toFixed(1)+'%', after: after.destLoad.toFixed(1)+'%', d: delta(before.destLoad, after.destLoad, '%', 1) },
+            { label: 'Bottleneck CT', before: before.bottleneck.toFixed(1)+'s', after: after.bottleneck.toFixed(1)+'s', d: delta(before.bottleneck, after.bottleneck, 's', 1) },
+            { label: 'Takt Time', before: before.takt.toFixed(1)+'s', after: after.takt.toFixed(1)+'s', d: delta(before.takt, after.takt, 's', 1) },
+        ];
+
+        grid.innerHTML = cards.map(c => `
+            <div style="background:rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px">
+                <div style="font-size:0.72rem;opacity:.6;margin-bottom:4px">${c.label}</div>
+                <div style="font-size:1rem;font-weight:700">${c.after} ${c.badge || ''}</div>
+                <div style="font-size:0.75rem;margin-top:2px;opacity:.7">${c.before} → ${c.d}</div>
+            </div>`).join('');
+
+        // Also add the moved element summary
+        panel.querySelector('div[style*="letter-spacing"]').textContent =
+            '⬆ MOVED: "' + item.name + '" (' + item.duration + 's) from ' +
+            state.stationNames[srcIdx] + ' → ' + state.stationNames[destIdx];
+
+        // Auto-scroll to panel
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     // ── Excel export (SheetJS + html2canvas) ─────────────────────────────────
@@ -1297,10 +1442,9 @@ if (!window.location.search.includes('token=securelink123')) {
             ws4['!cols'] = [22, ...Array(yamHeader.length - 1).fill(14)].map(w => ({ wch: w }));
             XLSX.utils.book_append_sheet(wb, ws4, 'Yamazumi Data');
 
-            // ── Sheets 5-7: Chart images via html2canvas ──────────────────────
+            // ── Sheets 5-6: Chart images via html2canvas ──────────────────────
             const chartDefs = [
                 { canvasId: 'balanceChart',  sheetName: 'Line Balance Chart'  },
-                { canvasId: 'paretoChart',   sheetName: 'Pareto Chart'        },
                 { canvasId: 'yamazumiChart', sheetName: 'Yamazumi Chart'      }
             ];
 
@@ -1518,6 +1662,10 @@ if (!window.location.search.includes('token=securelink123')) {
     // Close modals on backdrop click
     ['weModal','catModal','stationNameModal','stationModal','saveModal'].forEach(id => {
         document.getElementById(id).addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); });
+    });
+    // Colour picker modal — backdrop closes it keeping current colour
+    document.getElementById('weColorModal').addEventListener('click', e => {
+        if (e.target === e.currentTarget) confirmWeColor(false);
     });
 
     window.onload = calculate;
