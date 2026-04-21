@@ -68,6 +68,11 @@
         #tableBody tr:active { cursor: grabbing; }
         #tableBody tr.drag-over { border-top: 3px solid var(--accent); }
         #tableBody tr.dragging { opacity: 0.4; box-shadow: 0 8px 24px rgba(0,0,0,0.18); background: #e0f2fe; }
+        /* WE tag drag in table */
+        .we-tag-drag { cursor: grab; user-select: none; transition: opacity 0.15s; }
+        .we-tag-drag:active { cursor: grabbing; opacity: 0.5; }
+        #tableBody tr.we-drop-target { outline: 2px dashed var(--accent); background: #eff6ff; }
+        #tableBody tr.we-drop-target td { background: transparent; }
         /* work-element drag */
         .we-row { cursor: grab; }
         .we-row:active { cursor: grabbing; }
@@ -514,14 +519,21 @@ if (!window.location.search.includes('token=securelink123')) {
 
             const wes = state.workElements['s' + i] || [];
             const weHtml = wes.length
-                ? wes.map(w => `<span class="tag" style="background:${stationCatColor(i, w.catId)}22;color:${stationCatColor(i, w.catId)}">${w.name} ${w.duration}s</span>`).join('')
+                ? wes.map((w, wi) =>
+                    `<span class="tag we-tag-drag"
+                        draggable="true"
+                        title="Drag to move to another station"
+                        ondragstart="onTableWEDragStart(event,${i},${wi})"
+                        ondragend="onTableWEDragEnd(event)"
+                        style="background:${stationCatColor(i, w.catId)}22;color:${stationCatColor(i, w.catId)}"
+                    >${w.name} ${w.duration}s</span>`).join('')
                 : '<span style="color:#94a3b8;font-size:0.75rem">none</span>';
 
             tbody.innerHTML += `<tr draggable="true" data-index="${i}"
                 ondragstart="onDragStart(event,${i})"
-                ondragover="onDragOver(event)"
-                ondragleave="onDragLeave(event)"
-                ondrop="onDrop(event,${i})"
+                ondragover="onTableRowWEDragOver(event,${i})"
+                ondragleave="onTableRowWEDragLeave(event)"
+                ondrop="onTableRowWEDrop(event,${i})"
                 ondragend="onDragEnd(event)">
                 <td class="editable-cell" onclick="editStationName(${i})">${state.stationNames[i]}</td>
                 <td>${state.lineType}</td>
@@ -662,10 +674,46 @@ if (!window.location.search.includes('token=securelink123')) {
                 plugins: {
                     legend: { display: true, position: 'top',
                         labels: { font: { size: 10 }, boxWidth: 12, padding: 8,
-                            // Deduplicate legend: show each dataset label once
-                            filter: (item, chart) => {
-                                const idx = chart.datasets.findIndex(d => d.label === item.text);
-                                return idx === item.datasetIndex;
+                            filter: (item) => {
+                                // Hide "(unset)" blocks and hide duplicate category names
+                                if (item.text.includes('(unset)')) return false;
+                                // For category segments: show only the category part (after ' · ')
+                                return true;
+                            },
+                            generateLabels: (chart) => {
+                                // Build a deduplicated legend: one entry per unique category name + color
+                                const seen = new Map();
+                                chart.data.datasets.forEach((ds, i) => {
+                                    if (ds.type === 'line') {
+                                        // Takt line — always show
+                                        seen.set('__takt__' + i, {
+                                            text: ds.label,
+                                            fillStyle: 'transparent',
+                                            strokeStyle: ds.borderColor,
+                                            lineWidth: 2,
+                                            lineDash: [5,5],
+                                            datasetIndex: i,
+                                            hidden: false
+                                        });
+                                        return;
+                                    }
+                                    if (ds.label && ds.label.includes('(unset)')) return; // skip unset
+                                    // Extract category name (after ' · ')
+                                    const parts = ds.label ? ds.label.split(' · ') : [];
+                                    const catLabel = parts.length > 1 ? parts[parts.length - 1] : ds.label;
+                                    const key = catLabel + '||' + ds.backgroundColor;
+                                    if (!seen.has(key)) {
+                                        seen.set(key, {
+                                            text: catLabel,
+                                            fillStyle: ds.backgroundColor,
+                                            strokeStyle: ds.backgroundColor,
+                                            lineWidth: 0,
+                                            datasetIndex: i,
+                                            hidden: false
+                                        });
+                                    }
+                                });
+                                return Array.from(seen.values());
                             }
                         }
                     },
@@ -1278,8 +1326,72 @@ if (!window.location.search.includes('token=securelink123')) {
 
     function onDragEnd(e) {
         e.target.classList.remove('dragging');
-        document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('drag-over'));
+        document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('drag-over', 'we-drop-target'));
         dragSrcIndex = -1;
+    }
+
+    // ── WE tag drag from Station Slot Analysis table ──────────────────────────
+    let tableWESrcStation = -1;
+    let tableWESrcWeIdx   = -1;
+
+    function onTableWEDragStart(e, stationIdx, weIdx) {
+        tableWESrcStation = stationIdx;
+        tableWESrcWeIdx   = weIdx;
+        // Prevent the row-reorder drag from also firing
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'tablewe:' + stationIdx + ':' + weIdx);
+        dragSrcIndex = -1; // neutralise row reorder
+    }
+
+    function onTableWEDragEnd(e) {
+        tableWESrcStation = -1;
+        tableWESrcWeIdx   = -1;
+        document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('we-drop-target'));
+        dragSrcIndex = -1;
+    }
+
+    function onTableRowWEDragOver(e, stationIdx) {
+        // Only intercept if we're dragging a WE tag (not a row reorder)
+        if (tableWESrcStation === -1) {
+            // Fall through to normal row drag
+            onDragOver(e);
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('we-drop-target', 'drag-over'));
+        if (stationIdx !== tableWESrcStation) {
+            e.currentTarget.classList.add('we-drop-target');
+        }
+    }
+
+    function onTableRowWEDragLeave(e) {
+        if (tableWESrcStation === -1) {
+            onDragLeave(e);
+            return;
+        }
+        e.currentTarget.classList.remove('we-drop-target');
+    }
+
+    function onTableRowWEDrop(e, destStationIdx) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('we-drop-target', 'drag-over'));
+
+        if (tableWESrcStation !== -1 && tableWESrcWeIdx !== -1 && destStationIdx !== tableWESrcStation) {
+            // Move WE between stations
+            moveWorkElement(tableWESrcStation, tableWESrcWeIdx, destStationIdx);
+            tableWESrcStation = -1;
+            tableWESrcWeIdx   = -1;
+        } else if (tableWESrcStation === -1) {
+            // Normal row reorder
+            onDrop(e, destStationIdx);
+        } else {
+            tableWESrcStation = -1;
+            tableWESrcWeIdx   = -1;
+        }
     }
 
     // ── Excel export (SheetJS + html2canvas) ─────────────────────────────────
