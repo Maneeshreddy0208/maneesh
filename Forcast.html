@@ -68,6 +68,16 @@
         #tableBody tr:active { cursor: grabbing; }
         #tableBody tr.drag-over { border-top: 3px solid var(--accent); }
         #tableBody tr.dragging { opacity: 0.4; box-shadow: 0 8px 24px rgba(0,0,0,0.18); background: #e0f2fe; }
+        /* work-element drag */
+        .we-row { cursor: grab; }
+        .we-row:active { cursor: grabbing; }
+        .we-row.we-dragging { opacity: 0.35; background: #eff6ff; }
+        .we-row.we-drag-over { border-top: 2px solid var(--accent); }
+        /* drop-to-station zone */
+        #weDropZone { border: 2px dashed var(--border); border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 0.82rem; color: #64748b; transition: border-color 0.15s, background 0.15s; }
+        #weDropZone.drop-active { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
+        /* WE breakdown chart */
+        .we-breakdown-container { position: relative; width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -220,6 +230,15 @@ if (!window.location.search.includes('token=securelink123')) {
         </div>
     </div>
 
+    <!-- Work Elements Breakdown Chart -->
+    <div class="card">
+        <h3>🔬 Work Elements Breakdown - Grouped by Station</h3>
+        <p class="hint-text" style="margin-top:-6px">Each group is a station. Each bar is one work element. Click a bar to open that station's editor.</p>
+        <div class="we-breakdown-container" id="weBreakdownWrap">
+            <canvas id="weBreakdownChart"></canvas>
+        </div>
+    </div>
+
     <!-- Station Slot Analysis -->
     <div class="card" style="margin-top:24px;overflow-x:auto">
         <h3>📋 Station Slot Analysis - Click name or cycle time to edit &nbsp;<span style="font-size:0.78rem;color:#64748b;font-weight:400">· Hold and drag rows to reorder</span></h3>
@@ -315,6 +334,16 @@ if (!window.location.search.includes('token=securelink123')) {
         </div>
         <button class="btn btn-secondary" onclick="addWorkElement()" style="width:100%">➕ Add Element</button>
         <div id="weList" style="margin-top:12px"></div>
+
+        <!-- Drop zone: drag a WE row here and pick destination station -->
+        <div id="weDropZone"
+            ondragover="onWEDropZoneDragOver(event)"
+            ondragleave="onWEDropZoneDragLeave(event)"
+            ondrop="onWEDropZoneDrop(event)">
+            ⬇ Drag an element here to move it to another station
+            <div id="weDropStationPicker" style="display:none;margin-top:8px"></div>
+        </div>
+
         <div class="modal-buttons">
             <button class="btn" onclick="closeWeModal()">Done</button>
         </div>
@@ -518,6 +547,7 @@ if (!window.location.search.includes('token=securelink123')) {
         updateLineBalanceChart(labels, totalTimes, barColors, takt);
         updateParetoChart(labels, totalTimes, takt);
         updateYamazumiChart(labels, takt);
+        updateWeBreakdownChart();
     }
 
     function calcVariance(values) {
@@ -705,6 +735,7 @@ if (!window.location.search.includes('token=securelink123')) {
     function closeWeModal() {
         document.getElementById('weModal').classList.remove('active');
         editingStationIndex = -1;
+        weDragSrcWeIdx = -1;
         state.buildTimeOverride = false;
         calculate();
     }
@@ -798,15 +829,251 @@ if (!window.location.search.includes('token=securelink123')) {
         const idx  = editingStationIndex;
         const wes  = state.workElements['s' + idx] || [];
         const el   = document.getElementById('weList');
+        // Reset drop zone
+        document.getElementById('weDropZone').classList.remove('drop-active');
+        document.getElementById('weDropStationPicker').style.display = 'none';
+        weDragSrcWeIdx = -1;
+
         if (!wes.length) { el.innerHTML = '<div style="color:#94a3b8;font-size:0.82rem">No elements yet.</div>'; return; }
         el.innerHTML = wes.map((w, i) => `
-            <div class="we-row">
+            <div class="we-row"
+                draggable="true"
+                data-we-idx="${i}"
+                ondragstart="onWEDragStart(event,${i})"
+                ondragover="onWERowDragOver(event)"
+                ondragleave="onWERowDragLeave(event)"
+                ondrop="onWERowDrop(event,${i})"
+                ondragend="onWEDragEnd(event)">
+                <span style="cursor:grab;color:#94a3b8;font-size:1rem;line-height:1;padding-right:2px">⠿</span>
                 <span class="color-dot" style="background:${stationCatColor(idx, w.catId)}"></span>
                 <span style="flex:1">${w.name}</span>
                 <span style="color:#64748b">${w.duration}s</span>
                 <span class="tag" style="background:${stationCatColor(idx, w.catId)}22;color:${stationCatColor(idx, w.catId)}">${stationCatName(idx, w.catId)}</span>
                 <button class="btn btn-danger" style="padding:2px 8px;font-size:0.75rem" onclick="removeWe(${i})">×</button>
             </div>`).join('');
+    }
+
+    // ── Work element drag (reorder within station + move to other station) ────
+    let weDragSrcWeIdx = -1;
+
+    function onWEDragStart(e, weIdx) {
+        weDragSrcWeIdx = weIdx;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'we:' + weIdx);
+        setTimeout(() => {
+            const rows = document.querySelectorAll('#weList .we-row');
+            if (rows[weIdx]) rows[weIdx].classList.add('we-dragging');
+        }, 0);
+    }
+
+    function onWEDragEnd(e) {
+        document.querySelectorAll('#weList .we-row').forEach(r => {
+            r.classList.remove('we-dragging', 'we-drag-over');
+        });
+    }
+
+    // Reorder within the same station list
+    function onWERowDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.querySelectorAll('#weList .we-row').forEach(r => r.classList.remove('we-drag-over'));
+        e.currentTarget.classList.add('we-drag-over');
+    }
+
+    function onWERowDragLeave(e) {
+        e.currentTarget.classList.remove('we-drag-over');
+    }
+
+    function onWERowDrop(e, targetWeIdx) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('we-drag-over');
+        if (weDragSrcWeIdx === -1 || weDragSrcWeIdx === targetWeIdx) return;
+        const wes  = state.workElements['s' + editingStationIndex];
+        const item = wes.splice(weDragSrcWeIdx, 1)[0];
+        wes.splice(targetWeIdx, 0, item);
+        weDragSrcWeIdx = -1;
+        renderWeList();
+    }
+
+    // Drop zone — move to another station
+    function onWEDropZoneDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const zone = document.getElementById('weDropZone');
+        zone.classList.add('drop-active');
+        // Show station picker if not already shown
+        const picker = document.getElementById('weDropStationPicker');
+        if (picker.style.display === 'none') {
+            picker.style.display = 'block';
+            picker.innerHTML = '<div style="font-size:0.78rem;font-weight:600;margin-bottom:6px">Move to station:</div>' +
+                Array.from({length: state.seats}, (_, i) => i)
+                    .filter(i => i !== editingStationIndex)
+                    .map(i => `<button class="btn btn-secondary"
+                        style="padding:4px 10px;font-size:0.78rem;margin:2px"
+                        ondragover="event.preventDefault()"
+                        ondrop="doMoveWEToStation(event,${i})"
+                        onclick="doMoveWEToStation(null,${i})"
+                        >${state.stationNames[i]}</button>`).join('');
+        }
+    }
+
+    function onWEDropZoneDragLeave(e) {
+        // Only collapse if leaving the zone entirely (not entering a child)
+        if (!document.getElementById('weDropZone').contains(e.relatedTarget)) {
+            document.getElementById('weDropZone').classList.remove('drop-active');
+        }
+    }
+
+    function onWEDropZoneDrop(e) {
+        e.preventDefault();
+        // Picker buttons handle the actual move; this prevents default browser behaviour
+    }
+
+    function doMoveWEToStation(e, destIdx) {
+        if (e) e.preventDefault();
+        if (weDragSrcWeIdx === -1) return;
+        moveWorkElement(editingStationIndex, weDragSrcWeIdx, destIdx);
+    }
+
+    function moveWorkElement(srcStationIdx, weIdx, destStationIdx) {
+        const srcWes  = state.workElements['s' + srcStationIdx] || [];
+        const destWes = state.workElements['s' + destStationIdx] || [];
+        if (weIdx < 0 || weIdx >= srcWes.length) return;
+
+        const item = srcWes.splice(weIdx, 1)[0];
+        // Keep catId as-is (category stays with element)
+        destWes.push(item);
+        state.workElements['s' + destStationIdx] = destWes;
+
+        // Recalculate cycle times for both stations
+        state.stationCycleTimes[srcStationIdx]  = srcWes.length
+            ? srcWes.reduce((a, b) => a + b.duration, 0).toFixed(1)
+            : '0.0';
+        state.stationCycleTimes[destStationIdx] = destWes.reduce((a, b) => a + b.duration, 0).toFixed(1);
+        state.buildTimeOverride = false;
+        document.getElementById('totalBuildTime').value = sumCycleTimes().toFixed(1);
+
+        weDragSrcWeIdx = -1;
+        // Reset drop zone
+        document.getElementById('weDropZone').classList.remove('drop-active');
+        document.getElementById('weDropStationPicker').style.display = 'none';
+        renderWeList();
+        // Show quick confirmation
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:8px 20px;border-radius:8px;font-size:0.85rem;font-weight:600;z-index:2000;box-shadow:0 4px 12px rgba(0,0,0,0.15)';
+        banner.textContent = '✓ Moved to ' + state.stationNames[destStationIdx];
+        document.body.appendChild(banner);
+        setTimeout(() => banner.remove(), 1800);
+    }
+
+    // ── Work Elements Breakdown Chart ─────────────────────────────────────────
+    let weBreakdownChart = null;
+
+    function updateWeBreakdownChart() {
+        const wrap  = document.getElementById('weBreakdownWrap');
+        const takt  = calcTakt();
+        // Collect all WEs across all stations that have elements
+        const allLabels = [];
+        const allData   = [];
+        const allColors = [];
+        const allStationIdx = [];  // which station each bar belongs to
+        const groupLabels = [];    // x-axis group labels (station names)
+
+        let hasAny = false;
+        for (let i = 0; i < state.seats; i++) {
+            const wes = state.workElements['s' + i] || [];
+            groupLabels.push(state.stationNames[i]);
+            if (wes.length) {
+                hasAny = true;
+                wes.forEach(w => {
+                    allLabels.push(w.name + ' [' + state.stationNames[i] + ']');
+                    allData.push(parseFloat(w.duration));
+                    allColors.push(stationCatColor(i, w.catId));
+                    allStationIdx.push(i);
+                });
+            }
+        }
+
+        if (!hasAny) {
+            wrap.style.height = '60px';
+            wrap.innerHTML = '<canvas id="weBreakdownChart" style="display:none"></canvas><div style="color:#94a3b8;font-size:0.85rem;padding:16px 0">No work elements added yet. Open a station to add elements.</div>';
+            return;
+        }
+
+        // Dynamically size chart height based on total elements
+        const totalElements = allLabels.length;
+        const chartH = Math.max(300, Math.min(600, 80 + totalElements * 28));
+        wrap.style.height = chartH + 'px';
+        // Re-create canvas (needed after innerHTML replacement)
+        if (!document.getElementById('weBreakdownChart')) {
+            wrap.innerHTML = '<canvas id="weBreakdownChart"></canvas>';
+        }
+        const ctx = document.getElementById('weBreakdownChart');
+
+        if (weBreakdownChart) weBreakdownChart.destroy();
+
+        // Build dataset: one dataset per station so bars group together
+        const datasets = [];
+        for (let si = 0; si < state.seats; si++) {
+            const wes = state.workElements['s' + si] || [];
+            if (!wes.length) continue;
+            wes.forEach((w, wi) => {
+                datasets.push({
+                    label: w.name,
+                    data: Array.from({length: state.seats}, (_, i) => i === si ? w.duration : null),
+                    backgroundColor: stationCatColor(si, w.catId),
+                    borderRadius: 3,
+                    borderSkipped: false,
+                    stationIdx: si,
+                    weIdx: wi
+                });
+            });
+        }
+
+        // Add takt line dataset
+        datasets.push({
+            type: 'line',
+            label: 'Takt (' + takt.toFixed(1) + 's)',
+            data: Array(state.seats).fill(parseFloat(takt.toFixed(1))),
+            borderColor: '#ef4444',
+            borderWidth: 2,
+            borderDash: [5,5],
+            fill: false,
+            pointRadius: 0,
+            skipNull: true
+        });
+
+        weBreakdownChart = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: { labels: groupLabels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: (evt) => {
+                    const pts = weBreakdownChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+                    if (!pts.length) return;
+                    const ds = weBreakdownChart.data.datasets[pts[0].datasetIndex];
+                    if (ds.stationIdx !== undefined) openWeModal(ds.stationIdx);
+                },
+                scales: {
+                    x: { stacked: false, title: { display: true, text: 'Station' } },
+                    y: { beginAtZero: true, title: { display: true, text: 'Seconds' } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => groupLabels[items[0].dataIndex],
+                            label: (ctx) => {
+                                if (ctx.parsed.y === null) return null;
+                                return ctx.dataset.label + ': ' + ctx.parsed.y + 's';
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     function addWorkElement() {
