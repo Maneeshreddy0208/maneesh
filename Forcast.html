@@ -139,9 +139,14 @@ if (!window.location.search.includes('token=securelink123')) {
                 <input type="number" id="seats" value="10" min="1" max="50" oninput="calculate()">
             </div>
             <div class="input-group">
-                <label>Total Seconds to Build One Unit</label>
+                <label>Master Cycle Time — CT (seconds per unit)</label>
                 <input type="number" id="totalBuildTime" value="400" oninput="onBuildTimeInput()">
-                <p class="hint-text">Auto-sums station cycle times — edit to override</p>
+                <p class="hint-text">Auto-sums all station CTs — edit to override. Resets when stations change.</p>
+            </div>
+            <div class="input-group">
+                <label>UPH Override <span style="font-weight:400;color:#94a3b8">(leave 0 to use demand UPH)</span></label>
+                <input type="number" id="uphOverride" value="0" min="0" step="0.1" oninput="calculate()">
+                <p class="hint-text">Set a value to override the demand-based UPH for headcount planning.</p>
             </div>
         </div>
     </div>
@@ -153,7 +158,7 @@ if (!window.location.search.includes('token=securelink123')) {
             <span id="val-daily">0</span>
         </div>
         <div class="stat-box">
-            <span class="stat-label">Req. UPH</span>
+            <span class="stat-label">UPH <span id="uph-source-label" style="font-size:0.65rem;opacity:.6;display:block;margin-top:2px">demand-based</span></span>
             <span id="val-uph">0</span>
         </div>
         <div class="stat-box">
@@ -161,9 +166,23 @@ if (!window.location.search.includes('token=securelink123')) {
             <span id="val-takt">0s</span>
         </div>
         <div class="stat-box">
-            <span class="stat-label">Req. Operators</span>
+            <span class="stat-label">Man Hour <span style="font-size:0.65rem;opacity:.6;display:block;margin-top:2px">CT ÷ 3600</span></span>
+            <span id="val-manhour">0</span>
+        </div>
+        <div class="stat-box" style="background:#1d4ed8">
+            <span class="stat-label">Headcount <span style="font-size:0.65rem;opacity:.6;display:block;margin-top:2px">MH × UPH ↑ rounded</span></span>
             <span id="val-ops">0</span>
         </div>
+    </div>
+
+    <!-- Formula breakdown strip -->
+    <div style="background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.82rem;color:#475569;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <strong style="color:var(--primary)">Formula chain:</strong>
+        <span>UPH = Daily ÷ Hours</span><span style="opacity:.4">→</span>
+        <span>Takt = 3600 ÷ UPH</span><span style="opacity:.4">→</span>
+        <span>Man Hour = CT ÷ 3600</span><span style="opacity:.4">→</span>
+        <span><strong style="color:#1d4ed8">Headcount = Man Hour × UPH</strong> (⌈rounded up⌉)</span>
+        <span style="margin-left:auto;font-style:italic;opacity:.6" id="val-formula-live"></span>
     </div>
 
     <!-- Hours status row -->
@@ -445,10 +464,15 @@ if (!window.location.search.includes('token=securelink123')) {
     function catColor(id) { const c = catById(id); return c ? c.color : '#94a3b8'; }
     function catName(id)  { const c = catById(id); return c ? c.name  : 'Uncategorised'; }
 
-    function calcTakt() {
+    function calcUPH() {
+        const overrideVal = parseFloat(document.getElementById('uphOverride').value) || 0;
+        if (overrideVal > 0) return overrideVal;
         const daily = Math.ceil(state.target / state.days);
-        const uph   = daily / state.hours;
-        return 3600 / uph;
+        return daily / state.hours;
+    }
+
+    function calcTakt() {
+        return 3600 / calcUPH();
     }
 
     function sumCycleTimes() {
@@ -467,9 +491,15 @@ if (!window.location.search.includes('token=securelink123')) {
         state.seats    = parseInt(document.getElementById('seats').value)     || 1;
         state.lineType = document.getElementById('lineType').value;
 
-        const daily = Math.ceil(state.target / state.days);
-        const uph   = daily / state.hours;
-        const takt  = 3600 / uph;
+        const daily       = Math.ceil(state.target / state.days);
+        const demandUPH   = daily / state.hours;
+        const uphOverride = parseFloat(document.getElementById('uphOverride').value) || 0;
+        const uph         = uphOverride > 0 ? uphOverride : demandUPH;
+        const takt        = 3600 / uph;
+
+        // UPH source label
+        document.getElementById('uph-source-label').textContent =
+            uphOverride > 0 ? 'overridden' : 'demand-based';
 
         // Initialise station data for new stations
         while (state.stationCycleTimes.length < state.seats) {
@@ -487,22 +517,36 @@ if (!window.location.search.includes('token=securelink123')) {
             }
         }
 
-        // Build time field: auto-sum unless overridden
+        // Master CT: auto-sum unless manually overridden
+        // Reset override when stations change (sum changes due to WE edits)
+        const autoSum = sumCycleTimes();
         if (!state.buildTimeOverride) {
-            document.getElementById('totalBuildTime').value = sumCycleTimes().toFixed(1);
+            document.getElementById('totalBuildTime').value = autoSum.toFixed(1);
         }
-        const buildTime = parseFloat(document.getElementById('totalBuildTime').value) || sumCycleTimes() || 1;
-        const reqOps = Math.ceil(buildTime / takt);
+        const masterCT = parseFloat(document.getElementById('totalBuildTime').value) || autoSum || 1;
 
-        document.getElementById('val-daily').innerText = daily;
-        document.getElementById('val-uph').innerText   = uph.toFixed(1);
-        document.getElementById('val-takt').innerText  = takt.toFixed(1) + 's';
-        document.getElementById('val-ops').innerText   = reqOps;
+        // ── Headcount formula chain ──────────────────────────────────────────
+        // Man Hour  = Master CT ÷ 3600
+        // Headcount = Man Hour × UPH  → ceiling
+        const manHour   = masterCT / 3600;
+        const hcExact   = manHour * uph;
+        const headcount = Math.ceil(hcExact);
+
+        // Update stat boxes
+        document.getElementById('val-daily').innerText   = daily;
+        document.getElementById('val-uph').innerText     = uph.toFixed(1);
+        document.getElementById('val-takt').innerText    = takt.toFixed(1) + 's';
+        document.getElementById('val-manhour').innerText = manHour.toFixed(4);
+        document.getElementById('val-ops').innerText     = headcount;
+
+        // Live formula strip
+        document.getElementById('val-formula-live').textContent =
+            `(${masterCT.toFixed(1)}s ÷ 3600) × ${uph.toFixed(1)} = ${hcExact.toFixed(2)} → ⌈${headcount}⌉ HC`;
 
         updateHoursPanel(takt);
         updateTableAndCharts(takt);
         calculateEfficiency();
-        generateAIInsights(takt, uph, reqOps, daily);
+        generateAIInsights(takt, uph, headcount, daily);
     }
 
     function updateTableAndCharts(takt) {
@@ -689,15 +733,15 @@ if (!window.location.search.includes('token=securelink123')) {
     }
 
     function calculateEfficiency() {
-        const cur    = parseFloat(document.getElementById('current-ops').value) || 1;
-        const reqOps = parseFloat(document.getElementById('val-ops').innerText) || 1;
-        document.getElementById('efficiency').value = ((reqOps / cur) * 100).toFixed(1) + '%';
+        const cur       = parseFloat(document.getElementById('current-ops').value) || 1;
+        const headcount = parseFloat(document.getElementById('val-ops').innerText) || 1;
+        document.getElementById('efficiency').value = ((headcount / cur) * 100).toFixed(1) + '%';
     }
 
-    function generateAIInsights(takt, uph, reqOps, daily) {
+    function generateAIInsights(takt, uph, headcount, daily) {
         const over  = state.stationCycleTimes.slice(0, state.seats).filter(t => parseFloat(t) > takt).length;
         const cur   = parseFloat(document.getElementById('current-ops').value) || 1;
-        const eff   = (reqOps / cur) * 100;
+        const eff   = (headcount / cur) * 100;
         const br    = parseFloat(document.getElementById('balance-rate').value) || 80;
         const avgC  = parseFloat(document.getElementById('avg-cycle').value) || takt;
         let ins = [];
@@ -706,11 +750,11 @@ if (!window.location.search.includes('token=securelink123')) {
             ins.push(`<strong>🚨 Critical:</strong> ${over} station(s) exceed takt time — line starvation risk. Click station bars in the Yamazumi to rebalance work elements.`);
         }
         if (eff > 100) {
-            ins.push(`<strong>⚠️ Understaffed:</strong> Need ${reqOps} operators, have ${Math.round(cur)}. Add ${reqOps - Math.round(cur)} more to hit ${daily} units/day.`);
+            ins.push(`<strong>⚠️ Understaffed:</strong> Required headcount is ${headcount}, current operators ${Math.round(cur)}. Add ${headcount - Math.round(cur)} more to hit ${daily} units/day.`);
         } else if (eff < 70) {
             ins.push(`<strong>✅ Overstaffed:</strong> Only ${Math.round(eff)}% utilisation. Consider reducing operators or raising weekly target.`);
         } else {
-            ins.push(`<strong>📊 Staffing balanced:</strong> ${Math.round(eff)}% utilisation — well aligned to target.`);
+            ins.push(`<strong>📊 Headcount balanced:</strong> ${Math.round(eff)}% utilisation — well aligned to target.`);
         }
         if (br < 75) {
             ins.push(`<strong>📉 Poor balance rate:</strong> ${br}% — redistributing work elements could recover up to ${(100 - br).toFixed(1)}% efficiency.`);
@@ -718,6 +762,8 @@ if (!window.location.search.includes('token=securelink123')) {
         if (avgC < takt * 0.7) {
             ins.push(`<strong>💪 Headroom detected:</strong> Average cycle time is well below takt. Consider raising the weekly target.`);
         }
+        const manHour = parseFloat(document.getElementById('val-manhour').innerText) || 0;
+        ins.push(`<strong>📐 Formula check:</strong> CT=${parseFloat(document.getElementById('totalBuildTime').value).toFixed(1)}s → MH=${manHour.toFixed(4)} → HC=${manHour.toFixed(4)} × ${uph.toFixed(1)} UPH = <strong>${(manHour*uph).toFixed(2)} → ⌈${headcount}⌉</strong>`);
 
         document.getElementById('aiInsights').innerHTML = ins.map(t => `<div class="ai-suggestion">${t}</div>`).join('');
     }
@@ -1126,6 +1172,7 @@ if (!window.location.search.includes('token=securelink123')) {
         document.getElementById('seats').value       = 10;
         document.getElementById('current-ops').value = 8;
         document.getElementById('lineType').value    = 'R1s';
+        document.getElementById('uphOverride').value = 0;
         calculate();
     }
 
@@ -1314,7 +1361,7 @@ if (!window.location.search.includes('token=securelink123')) {
         state.stationCycleTimes[srcStationIdx]  = srcWes.length
             ? srcWes.reduce((a, b)  => a + b.duration, 0).toFixed(1) : '0.0';
         state.stationCycleTimes[destStationIdx] = destWes.reduce((a, b) => a + b.duration, 0).toFixed(1);
-        state.buildTimeOverride = false;
+        state.buildTimeOverride = false;  // reset so master CT re-syncs to new sum
 
         // Recalculate all metrics
         calculate();
@@ -1540,6 +1587,7 @@ if (!window.location.search.includes('token=securelink123')) {
             categories:         JSON.parse(JSON.stringify(state.categories)),
             buildTimeOverride:  state.buildTimeOverride,
             totalBuildTime:     parseFloat(document.getElementById('totalBuildTime').value) || 0,
+            uphOverride:        parseFloat(document.getElementById('uphOverride').value) || 0,
             currentOps:         parseFloat(document.getElementById('current-ops').value) || 8
         };
     }
@@ -1562,6 +1610,7 @@ if (!window.location.search.includes('token=securelink123')) {
         document.getElementById('seats').value       = state.seats;
         document.getElementById('lineType').value    = state.lineType;
         document.getElementById('current-ops').value = snap.currentOps ?? 8;
+        document.getElementById('uphOverride').value = snap.uphOverride ?? 0;
         if (snap.totalBuildTime) {
             document.getElementById('totalBuildTime').value = snap.totalBuildTime;
         }
