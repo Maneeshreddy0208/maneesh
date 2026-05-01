@@ -83,6 +83,27 @@
         #weDropZone.drop-active { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
         /* WE breakdown chart */
         .we-breakdown-container { position: relative; width: 100%; margin-top: 10px; }
+        /* ── Tab navigation ── */
+        .tab-nav { display:flex; gap:0; margin-bottom:24px; border-bottom:2px solid var(--border); }
+        .tab-btn { padding:10px 28px; border:none; background:transparent; font-size:0.95rem; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:color .15s,border-color .15s; }
+        .tab-btn.active { color:var(--primary); border-bottom-color:var(--accent); }
+        .tab-btn:hover:not(.active) { color:var(--primary); }
+        .tab-panel { display:none; }
+        .tab-panel.active { display:block; }
+        /* scenario table */
+        .sc-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+        .sc-table th { background:#f1f5f9; padding:8px 12px; text-align:left; font-weight:600; color:var(--primary); border-bottom:1px solid var(--border); }
+        .sc-table td { padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+        .sc-table tr:last-child td { border-bottom:none; }
+        .hc-spinner { width:60px; padding:4px 6px; text-align:center; }
+        .sc-over { color:var(--danger); font-weight:700; }
+        .sc-ok   { color:var(--success); font-weight:700; }
+        /* pay card */
+        .pay-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-top:14px; }
+        .pay-stat { background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+        .pay-stat-label { font-size:0.72rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+        .pay-stat-val { font-size:1.5rem; font-weight:800; color:var(--primary); }
+        .pay-stat-sub  { font-size:0.75rem; color:#94a3b8; margin-top:2px; }
     </style>
 </head>
 <body>
@@ -106,7 +127,14 @@ if (!window.location.search.includes('token=securelink123')) {
         </div>
     </header>
 
-    <!-- Production Demand & Configuration -->
+    <!-- Tab navigation -->
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('main')" id="tab-btn-main">⚙️ Main Dashboard</button>
+        <button class="tab-btn" onclick="switchTab('scenario')" id="tab-btn-scenario">🔬 HC Scenario Analysis</button>
+    </div>
+
+    <!-- ═══════════ MAIN TAB ═══════════ -->
+    <div id="tab-main" class="tab-panel active">
     <div class="grid-2">
         <div class="card">
             <h3>📅 Production Demand</h3>
@@ -304,7 +332,124 @@ if (!window.location.search.includes('token=securelink123')) {
             <p style="text-align:center;opacity:0.8">Run calculations to see AI recommendations...</p>
         </div>
     </div>
-</div>
+
+    <!-- ── Operator Pay Estimation ── -->
+    <div class="card" style="margin-top:24px">
+        <h3>💰 Operator Pay Estimation</h3>
+        <div class="grid-3">
+            <div class="input-group">
+                <label>Hours Working / Day</label>
+                <input type="number" id="pay-hours" value="8" step="0.5" oninput="calcPay()">
+            </div>
+            <div class="input-group">
+                <label>Days Working / Week</label>
+                <input type="number" id="pay-days" value="5" oninput="calcPay()">
+            </div>
+            <div class="input-group">
+                <label>Pay per Hour ($)</label>
+                <input type="number" id="pay-rate" value="18" step="0.5" oninput="calcPay()">
+            </div>
+        </div>
+
+        <!-- Headcount override row -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+            <label style="margin-bottom:0;white-space:nowrap">Headcount for pay estimate</label>
+            <div style="display:flex;align-items:center;gap:6px">
+                <button class="btn btn-secondary" style="padding:4px 12px;font-size:1.1rem;line-height:1;margin-right:0" onclick="adjustPayHC(-1)">−</button>
+                <input type="number" id="pay-hc-input" value="1" min="1" step="1"
+                    style="width:70px;text-align:center;font-size:1rem;font-weight:700;margin-bottom:0"
+                    oninput="calcPay()">
+                <button class="btn btn-secondary" style="padding:4px 12px;font-size:1.1rem;line-height:1;margin-right:0" onclick="adjustPayHC(1)">+</button>
+            </div>
+            <button class="btn" style="padding:5px 14px;font-size:0.8rem;margin-right:0;background:#64748b"
+                onclick="resetPayHCToCalc()">↩ Use calculated HC</button>
+            <span id="pay-hc-note" style="font-size:0.78rem;color:#94a3b8"></span>
+        </div>
+
+        <div class="pay-grid" id="payGrid">
+            <div class="pay-stat"><div class="pay-stat-label">Headcount Used</div><div class="pay-stat-val" id="pay-hc">—</div><div class="pay-stat-sub" id="pay-hc-sub">from main calculation</div></div>
+            <div class="pay-stat"><div class="pay-stat-label">Individual Weekly Pay</div><div class="pay-stat-val" id="pay-individual">—</div><div class="pay-stat-sub">hrs × days × rate</div></div>
+            <div class="pay-stat"><div class="pay-stat-label">Total Team Weekly Cost</div><div class="pay-stat-val" id="pay-total" style="color:#1d4ed8">—</div><div class="pay-stat-sub">individual × headcount</div></div>
+            <div class="pay-stat"><div class="pay-stat-label">Cost per Unit</div><div class="pay-stat-val" id="pay-per-unit">—</div><div class="pay-stat-sub">total weekly ÷ weekly target</div></div>
+        </div>
+    </div>
+
+    </div><!-- end tab-main -->
+
+    <!-- ═══════════ HC SCENARIO TAB ═══════════ -->
+    <div id="tab-scenario" class="tab-panel">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <div>
+                <h2 style="margin:0;color:var(--primary)">🔬 Headcount Scenario Analysis</h2>
+                <p style="margin:4px 0 0;font-size:0.82rem;color:#64748b">Copied from Main. Assign HC per station — effective CT = Base CT ÷ HC. All metrics recalculate independently.</p>
+            </div>
+            <button class="btn btn-secondary" onclick="syncScenarioFromMain()">🔄 Refresh from Main</button>
+        </div>
+
+        <!-- Scenario config -->
+        <div class="grid-3" style="margin-bottom:16px">
+            <div class="card" style="padding:14px 18px">
+                <div style="font-size:0.75rem;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Scenario Metrics</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Effective UPH</div><div id="sc-uph" style="font-size:1.3rem;font-weight:800;color:var(--primary)">—</div></div>
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Takt Time</div><div id="sc-takt" style="font-size:1.3rem;font-weight:800;color:var(--primary)">—</div></div>
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Daily Output</div><div id="sc-daily" style="font-size:1.3rem;font-weight:800;color:var(--primary)">—</div></div>
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Total HC</div><div id="sc-total-hc" style="font-size:1.3rem;font-weight:800;color:#1d4ed8">—</div></div>
+                </div>
+            </div>
+            <div class="card" style="padding:14px 18px">
+                <div style="font-size:0.75rem;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Hours Analysis</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Min Hours Needed</div><div id="sc-min-hours" style="font-size:1.3rem;font-weight:800;color:var(--primary)">—</div></div>
+                    <div><div style="font-size:0.72rem;color:#94a3b8">vs Current</div><div id="sc-hours-delta" style="font-size:1.3rem;font-weight:800;color:var(--success)">—</div></div>
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Bottleneck</div><div id="sc-bottleneck" style="font-size:1.1rem;font-weight:700;color:var(--primary)">—</div></div>
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Balance Rate</div><div id="sc-balance" style="font-size:1.3rem;font-weight:800;color:var(--primary)">—</div></div>
+                </div>
+            </div>
+            <div class="card" style="padding:14px 18px">
+                <div style="font-size:0.75rem;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Scenario Pay Est.</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Total HC Weekly</div><div id="sc-pay-total" style="font-size:1.3rem;font-weight:800;color:#1d4ed8">—</div></div>
+                    <div><div style="font-size:0.72rem;color:#94a3b8">Cost per Unit</div><div id="sc-pay-unit" style="font-size:1.3rem;font-weight:800;color:var(--primary)">—</div></div>
+                </div>
+                <div style="font-size:0.72rem;color:#94a3b8;margin-top:6px">Uses pay rates from Main tab</div>
+            </div>
+        </div>
+
+        <!-- Per-station HC assignment -->
+        <div class="card" style="margin-bottom:16px;overflow-x:auto">
+            <h3>👷 Per-Station Headcount Assignment</h3>
+            <p style="font-size:0.82rem;color:#64748b;margin-top:-6px;margin-bottom:12px">Effective CT = Base CT ÷ HC. Increasing HC reduces station CT and improves line throughput.</p>
+            <table class="sc-table">
+                <thead>
+                    <tr>
+                        <th>Station</th>
+                        <th>Base CT (s)</th>
+                        <th>HC Assigned</th>
+                        <th>Effective CT (s)</th>
+                        <th>Load %</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="scTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Scenario charts -->
+        <div class="card" style="margin-bottom:16px">
+            <h3>📊 Scenario Line Balance (Effective CT vs Takt)</h3>
+            <div class="chart-container"><canvas id="scBalanceChart"></canvas></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+            <h3>🗼 Scenario Yamazumi Chart</h3>
+            <p style="font-size:0.82rem;color:#64748b;margin-top:-6px">Stack shows effective (HC-adjusted) cycle times by station.</p>
+            <div class="yamazumi-container"><canvas id="scYamazumiChart"></canvas></div>
+        </div>
+
+    </div><!-- end tab-scenario -->
+
+</div><!-- end container -->
 
 <!-- WE Colour Picker Modal (shown after a WE is dropped onto a new station) -->
 <div id="weColorModal" class="modal">
@@ -547,6 +692,12 @@ if (!window.location.search.includes('token=securelink123')) {
         updateTableAndCharts(takt);
         calculateEfficiency();
         generateAIInsights(takt, uph, headcount, daily);
+        // Sync pay HC spinner to calculated HC if it's at default (1) — i.e. not yet manually set
+        const payHCInput = document.getElementById('pay-hc-input');
+        if (parseFloat(payHCInput.value) === 1 && headcount > 1) {
+            payHCInput.value = headcount;
+        }
+        calcPay();
     }
 
     function updateTableAndCharts(takt) {
@@ -1172,7 +1323,8 @@ if (!window.location.search.includes('token=securelink123')) {
         document.getElementById('seats').value       = 10;
         document.getElementById('current-ops').value = 8;
         document.getElementById('lineType').value    = 'R1s';
-        document.getElementById('uphOverride').value = 0;
+        document.getElementById('uphOverride').value  = 0;
+        document.getElementById('pay-hc-input').value = 1;
         calculate();
     }
 
@@ -1716,6 +1868,291 @@ if (!window.location.search.includes('token=securelink123')) {
     document.getElementById('weColorModal').addEventListener('click', e => {
         if (e.target === e.currentTarget) confirmWeColor(false);
     });
+
+    // ── Tab switching ─────────────────────────────────────────────────────────
+    function switchTab(tab) {
+        ['main','scenario'].forEach(t => {
+            document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+            document.getElementById('tab-btn-' + t).classList.toggle('active', t === tab);
+        });
+        if (tab === 'scenario') {
+            // Auto-sync if scenario has no data yet
+            if (!scState.stations.length) syncScenarioFromMain();
+            else renderScenario();
+        }
+    }
+
+    // ── Operator Pay Estimation ───────────────────────────────────────────────
+    function calcPay() {
+        const hours    = parseFloat(document.getElementById('pay-hours').value) || 0;
+        const days     = parseFloat(document.getElementById('pay-days').value)  || 0;
+        const rate     = parseFloat(document.getElementById('pay-rate').value)  || 0;
+        const calcHC   = parseFloat(document.getElementById('val-ops').innerText) || 0;
+        const inputHC  = parseFloat(document.getElementById('pay-hc-input').value) || 1;
+        const hc       = Math.max(1, inputHC);
+        const target   = state.target || 1;
+
+        const indiv    = hours * days * rate;
+        const total    = indiv * hc;
+        const perUnit  = total / target;
+
+        document.getElementById('pay-hc').textContent        = hc;
+        document.getElementById('pay-individual').textContent = '$' + indiv.toFixed(2);
+        document.getElementById('pay-total').textContent      = '$' + total.toFixed(2);
+        document.getElementById('pay-per-unit').textContent   = '$' + perUnit.toFixed(4);
+
+        // Note if overriding calculated HC
+        const noteEl = document.getElementById('pay-hc-note');
+        const subEl  = document.getElementById('pay-hc-sub');
+        if (hc !== calcHC && calcHC > 0) {
+            noteEl.textContent = `Calculated HC is ${calcHC} — you are using ${hc}`;
+            noteEl.style.color = '#f59e0b';
+            subEl.textContent  = 'manually set';
+        } else {
+            noteEl.textContent = calcHC > 0 ? `Matches calculated HC (${calcHC})` : '';
+            noteEl.style.color = '#94a3b8';
+            subEl.textContent  = 'from main calculation';
+        }
+    }
+
+    function adjustPayHC(delta) {
+        const inp = document.getElementById('pay-hc-input');
+        inp.value = Math.max(1, (parseFloat(inp.value) || 1) + delta);
+        calcPay();
+    }
+
+    function resetPayHCToCalc() {
+        const calcHC = parseFloat(document.getElementById('val-ops').innerText) || 1;
+        document.getElementById('pay-hc-input').value = calcHC;
+        calcPay();
+    }
+
+    // ── HC Scenario state ─────────────────────────────────────────────────────
+    let scState = {
+        stations: [],   // [{name, baseCT, hc}]
+        target: 0,
+        days: 5,
+        hours: 8
+    };
+    let scBalChart = null, scYamChart = null;
+
+    function syncScenarioFromMain() {
+        scState.target = state.target;
+        scState.days   = state.days;
+        scState.hours  = state.hours;
+        scState.stations = [];
+        for (let i = 0; i < state.seats; i++) {
+            scState.stations.push({
+                name:   state.stationNames[i] || ('Station ' + (i + 1)),
+                baseCT: parseFloat(state.stationCycleTimes[i]) || 0,
+                hc:     1
+            });
+        }
+        renderScenario();
+    }
+
+    function scHCChange(idx, val) {
+        const v = Math.max(1, parseInt(val) || 1);
+        scState.stations[idx].hc = v;
+        renderScenario();
+    }
+
+    function renderScenario() {
+        const stations = scState.stations;
+        if (!stations.length) return;
+
+        // ── Core formula chain ────────────────────────────────────────────────
+        // Effective CT per station = Base CT ÷ HC  (each worker shares the work)
+        const effCTs       = stations.map(s => parseFloat((s.baseCT / Math.max(1, s.hc)).toFixed(2)));
+
+        // Line throughput is constrained by the slowest (bottleneck) station
+        const bottleneckCT = Math.max(...effCTs);
+        const bnIdx        = effCTs.indexOf(bottleneckCT);
+
+        // UPH = 3600 ÷ bottleneck effective CT
+        const scUPH        = bottleneckCT > 0 ? 3600 / bottleneckCT : 0;
+
+        // Takt = bottleneck CT (line can't go faster than its slowest station)
+        const scTakt       = bottleneckCT;
+
+        // Daily output = UPH × net hours
+        const hours        = scState.hours;
+        const scDailyOutput = Math.floor(scUPH * hours);
+
+        // Baseline (HC=1 everywhere) for comparison
+        const baseUPH      = Math.max(...stations.map(s => s.baseCT)) > 0
+                             ? 3600 / Math.max(...stations.map(s => s.baseCT)) : 0;
+        const baseDaily    = Math.floor(baseUPH * hours);
+
+        const totalHC      = stations.reduce((a, s) => a + s.hc, 0);
+        const dailyTarget  = Math.ceil(scState.target / scState.days);
+        const minHours     = scUPH > 0 ? dailyTarget / scUPH : 0;
+        const delta        = hours - minHours;
+        const avgEffCT     = effCTs.reduce((a, b) => a + b, 0) / effCTs.length;
+        const balanceRate  = bottleneckCT > 0 ? ((avgEffCT / bottleneckCT) * 100).toFixed(1) : '—';
+
+        // Pay
+        const payHours   = parseFloat(document.getElementById('pay-hours').value) || hours;
+        const payDays    = parseFloat(document.getElementById('pay-days').value)  || scState.days;
+        const payRate    = parseFloat(document.getElementById('pay-rate').value)  || 0;
+        const scPayTotal = totalHC * payHours * payDays * payRate;
+        const scPayUnit  = scState.target > 0 ? scPayTotal / scState.target : 0;
+
+        // ── Update summary cards ──────────────────────────────────────────────
+        document.getElementById('sc-uph').textContent        = scUPH.toFixed(1);
+        document.getElementById('sc-takt').textContent       = scTakt.toFixed(1) + 's';
+        document.getElementById('sc-daily').textContent      = scDailyOutput;
+        document.getElementById('sc-total-hc').textContent   = totalHC;
+        document.getElementById('sc-min-hours').textContent  = minHours.toFixed(2) + 'h';
+        document.getElementById('sc-bottleneck').textContent = stations[bnIdx] ? stations[bnIdx].name : '—';
+        document.getElementById('sc-balance').textContent    = balanceRate + '%';
+        document.getElementById('sc-pay-total').textContent  = '$' + scPayTotal.toFixed(2);
+        document.getElementById('sc-pay-unit').textContent   = '$' + scPayUnit.toFixed(4);
+
+        const deltaEl = document.getElementById('sc-hours-delta');
+        deltaEl.textContent = (delta >= 0 ? '+' : '') + delta.toFixed(2) + 'h';
+        deltaEl.style.color = delta >= 0 ? 'var(--success)' : 'var(--danger)';
+
+        // UPH/Daily delta vs baseline
+        const uphDelta   = scUPH - baseUPH;
+        const dailyDelta = scDailyOutput - baseDaily;
+
+        // ── Table ─────────────────────────────────────────────────────────────
+        // Update header to show new columns
+        const thead = document.querySelector('#scTableBody').closest('table').querySelector('thead tr');
+        thead.innerHTML = `
+            <th>Station</th>
+            <th>Base CT (s)</th>
+            <th>HC Assigned</th>
+            <th>CT / Head (s)<br><span style="font-size:0.7rem;font-weight:400;color:#94a3b8">= Base CT ÷ HC</span></th>
+            <th>Contrib. to UPH<br><span style="font-size:0.7rem;font-weight:400;color:#94a3b8">3600 ÷ eff.CT</span></th>
+            <th>Load %</th>
+            <th>Status</th>`;
+
+        const tbody = document.getElementById('scTableBody');
+        tbody.innerHTML = '';
+        stations.forEach((s, i) => {
+            const eff       = effCTs[i];
+            const stationUPH = eff > 0 ? (3600 / eff).toFixed(1) : '—';  // what UPH this station alone could support
+            const load      = scTakt > 0 ? ((eff / scTakt) * 100).toFixed(1) : '—';
+            const over      = eff > scTakt + 0.01;
+            const isBN      = i === bnIdx;
+
+            tbody.innerHTML += `<tr style="${isBN ? 'background:#fff7ed;' : ''}">
+                <td>
+                    <strong>${s.name}</strong>
+                    ${isBN ? '<span style="margin-left:6px;font-size:0.7rem;background:#f97316;color:#fff;padding:1px 6px;border-radius:4px;font-weight:700">BOTTLENECK</span>' : ''}
+                </td>
+                <td style="color:#64748b">${s.baseCT.toFixed(1)}</td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <button class="btn btn-secondary" style="padding:2px 8px;font-size:1rem;line-height:1;margin-right:0"
+                            onclick="scHCChange(${i}, ${s.hc - 1})">−</button>
+                        <input type="number" class="hc-spinner" min="1" value="${s.hc}"
+                            onchange="scHCChange(${i}, this.value)" oninput="scHCChange(${i}, this.value)">
+                        <button class="btn btn-secondary" style="padding:2px 8px;font-size:1rem;line-height:1;margin-right:0"
+                            onclick="scHCChange(${i}, ${s.hc + 1})">+</button>
+                    </div>
+                </td>
+                <td>
+                    <strong style="font-size:1rem;color:${over ? 'var(--danger)' : 'var(--primary)'}">${eff.toFixed(2)}s</strong>
+                    ${s.hc > 1 ? `<div style="font-size:0.72rem;color:#22c55e">↓ ${s.baseCT.toFixed(1)} ÷ ${s.hc} = ${eff.toFixed(2)}</div>` : ''}
+                </td>
+                <td style="font-size:0.88rem">
+                    <span style="font-weight:700">${stationUPH}</span>
+                    <span style="color:#94a3b8;font-size:0.72rem"> UPH cap</span>
+                    ${isBN ? '<div style="font-size:0.7rem;color:#f97316;font-weight:600">← sets line UPH</div>' : ''}
+                </td>
+                <td class="${over ? 'sc-over' : parseFloat(load) > 85 ? 'status-warning' : 'sc-ok'}">${load}%</td>
+                <td class="${over ? 'sc-over' : 'sc-ok'}">${over ? '⚠ OVER TAKT' : '✅ OK'}</td>
+            </tr>`;
+        });
+
+        // ── Impact summary row below table ────────────────────────────────────
+        const impactRowId = 'sc-impact-row';
+        let impactEl = document.getElementById(impactRowId);
+        if (!impactEl) {
+            impactEl = document.createElement('div');
+            impactEl.id = impactRowId;
+            tbody.closest('.card').appendChild(impactEl);
+        }
+        const uphColor   = uphDelta >= 0 ? '#22c55e' : '#ef4444';
+        const dailyColor = dailyDelta >= 0 ? '#22c55e' : '#ef4444';
+        impactEl.innerHTML = `
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;padding:12px 14px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);font-size:0.85rem">
+                <div><span style="color:#64748b">Scenario UPH:</span> <strong>${scUPH.toFixed(1)}</strong>
+                    <span style="color:${uphColor};font-weight:700;margin-left:4px">${uphDelta >= 0 ? '+' : ''}${uphDelta.toFixed(1)} vs baseline</span></div>
+                <div style="color:#cbd5e1">|</div>
+                <div><span style="color:#64748b">Daily Output:</span> <strong>${scDailyOutput}</strong>
+                    <span style="color:${dailyColor};font-weight:700;margin-left:4px">${dailyDelta >= 0 ? '+' : ''}${dailyDelta} units vs baseline</span></div>
+                <div style="color:#cbd5e1">|</div>
+                <div><span style="color:#64748b">Takt:</span> <strong>${scTakt.toFixed(1)}s</strong></div>
+                <div style="color:#cbd5e1">|</div>
+                <div><span style="color:#64748b">Min hours needed:</span> <strong style="color:${delta >= 0 ? 'var(--success)' : 'var(--danger)'}">${minHours.toFixed(2)}h</strong>
+                    <span style="color:${delta >= 0 ? 'var(--success)' : 'var(--danger)'};margin-left:4px">(${delta >= 0 ? '+' : ''}${delta.toFixed(2)}h vs current ${hours}h)</span></div>
+            </div>`;
+
+        // Charts
+        const labels = stations.map((s, i) => 'S' + (i + 1));
+        const colors = effCTs.map(ct => ct > scTakt + 0.01 ? '#ef4444' : ct === scTakt ? '#f97316' : '#3b82f6');
+        renderScBalanceChart(labels, effCTs, colors, scTakt);
+        renderScYamazumi(labels, effCTs, scTakt, stations);
+    }
+
+    function renderScBalanceChart(labels, effCTs, colors, takt) {
+        const ctx = document.getElementById('scBalanceChart');
+        if (scBalChart) scBalChart.destroy();
+        scBalChart = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    { type: 'line', label: 'Takt (' + takt.toFixed(1) + 's)', data: Array(labels.length).fill(parseFloat(takt.toFixed(1))), borderColor: '#ef4444', borderWidth: 2, borderDash: [5,5], fill: false, pointRadius: 0 },
+                    { type: 'bar', label: 'Effective CT (s)', data: effCTs.map(v => parseFloat(v.toFixed(2))), backgroundColor: colors, borderRadius: 4 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Seconds' } } }, plugins: { legend: { display: true, position: 'top' } } }
+        });
+    }
+
+    function renderScYamazumi(labels, effCTs, takt, stations) {
+        const ctx = document.getElementById('scYamazumiChart');
+        if (scYamChart) scYamChart.destroy();
+
+        // Use global categories for colouring — stack by category from work elements, or single grey if none
+        const catMap = {};
+        state.categories.forEach(c => { catMap[c.id] = { name: c.name, color: c.color, data: Array(stations.length).fill(0) }; });
+        catMap['__none'] = { name: 'Uncategorised', color: '#94a3b8', data: Array(stations.length).fill(0) };
+
+        for (let i = 0; i < stations.length; i++) {
+            const wes    = state.workElements['s' + i] || [];
+            const scale  = stations[i].baseCT > 0 ? effCTs[i] / stations[i].baseCT : 1; // proportion after HC
+            if (wes.length === 0) {
+                catMap['__none'].data[i] = parseFloat(effCTs[i].toFixed(2));
+            } else {
+                wes.forEach(w => {
+                    const k = w.catId && catMap[w.catId] ? w.catId : '__none';
+                    catMap[k].data[i] += parseFloat((w.duration * scale).toFixed(2));
+                });
+            }
+        }
+
+        const datasets = Object.values(catMap)
+            .filter(v => v.data.some(d => d > 0))
+            .map(v => ({ label: v.name, data: v.data, backgroundColor: v.color, borderRadius: 2, stack: 'stack' }));
+
+        datasets.push({ type: 'line', label: 'Takt (' + takt.toFixed(1) + 's)', data: Array(stations.length).fill(parseFloat(takt.toFixed(1))), borderColor: '#ef4444', borderWidth: 2, borderDash: [5,5], fill: false, pointRadius: 0, stack: undefined });
+
+        scYamChart = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Seconds' } }, x: { stacked: true } },
+                plugins: { legend: { display: true, position: 'top', labels: { font: { size: 11 }, boxWidth: 14 } }, tooltip: { mode: 'index', intersect: false } }
+            }
+        });
+    }
 
     window.onload = calculate;
 </script>
